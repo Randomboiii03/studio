@@ -10,8 +10,9 @@ import PowerUpDisplay from './PowerUpDisplay';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
+import PauseMenu from './PauseMenu';
 import { cn } from '@/lib/utils';
-import { Award, Heart, Zap } from 'lucide-react';
+import { Award, Heart, Pause, Zap } from 'lucide-react';
 
 type Enemy = {
   id: number;
@@ -42,7 +43,7 @@ type ActivePowerUp = {
 };
 
 type GameState = {
-  status: 'idle' | 'playing' | 'gameOver';
+  status: 'idle' | 'playing' | 'gameOver' | 'paused';
   score: number;
   lives: number;
   combo: number;
@@ -67,6 +68,7 @@ type Action =
   | { type: 'GAME_TICK'; delta: number }
   | { type: 'INPUT_CHANGE'; value: string }
   | { type: 'RESET_GAME' }
+  | { type: 'EXIT_GAME' }
   | { type: 'ADD_ENEMY'; payload: Enemy }
   | { type: 'ENEMY_HIT'; payload: { enemyId: number } }
   | { type: 'DESTROY_ENEMY'; payload: { enemyId: number } }
@@ -79,7 +81,9 @@ type Action =
   | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
   | { type: 'SET_LIVES'; payload: number }
   | { type: 'TRIGGER_SHAKE' }
-  | { type: 'STOP_SHAKE' };
+  | { type: 'STOP_SHAKE' }
+  | { type: 'PAUSE_GAME' }
+  | { type: 'RESUME_GAME' };
 
 const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
@@ -120,6 +124,22 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'RESET_GAME':
       state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
       return { ...initialState, status: 'playing' };
+
+    case 'EXIT_GAME':
+        state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
+        return { ...initialState };
+
+    case 'PAUSE_GAME':
+      if (state.status === 'playing') {
+        return { ...state, status: 'paused' };
+      }
+      return state;
+
+    case 'RESUME_GAME':
+      if (state.status === 'paused') {
+        return { ...state, status: 'playing' };
+      }
+      return state;
 
     case 'INPUT_CHANGE':
       return { ...state, inputValue: action.value };
@@ -183,10 +203,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return true;
       });
       
-      if (triggerShake) {
-        return { ...state, enemies: newEnemies, lives: newLives, combo: newCombo, isShaking: true };
-      }
+      let newState = { ...state, enemies: newEnemies, lives: newLives, combo: newCombo };
 
+      if (triggerShake) {
+        newState.isShaking = true;
+      }
 
       if (gameOver) {
         return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [], isShaking: false };
@@ -208,7 +229,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
       const newLevel = Math.floor(state.score / 1000) + 1;
 
-      return { ...state, projectiles: newProjectiles, enemies: newEnemies, lives: newLives, combo: newCombo, level: newLevel };
+      return { ...newState, projectiles: newProjectiles, level: newLevel };
     }
     
     case 'ADD_EXPLOSION':
@@ -288,6 +309,7 @@ export function CyberTypeDefense() {
   }, [state.isShaking]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (state.status !== 'playing') return;
     const value = e.target.value.toLowerCase();
     dispatch({ type: 'INPUT_CHANGE', value });
 
@@ -358,7 +380,7 @@ export function CyberTypeDefense() {
             dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
         }, 500) } });
     }
-  }, [state.enemies, state.lives]);
+  }, [state.enemies, state.lives, toast]);
   
 
   const destroyEnemy = (enemy: Enemy, isFrenzy = false) => {
@@ -423,32 +445,48 @@ export function CyberTypeDefense() {
       return;
     }
 
-    const delta = (time - lastTimeRef.current) / 1000;
-    lastTimeRef.current = time;
-    enemySpawnTimerRef.current += delta * 1000;
+    if (state.status === 'playing') {
+      const delta = (time - lastTimeRef.current) / 1000;
+      enemySpawnTimerRef.current += delta * 1000;
 
-    spawnEnemy();
-    dispatch({ type: 'GAME_TICK', delta });
+      spawnEnemy();
+      dispatch({ type: 'GAME_TICK', delta });
+    }
     
+    lastTimeRef.current = time;
     gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [spawnEnemy]);
+  }, [spawnEnemy, state.status]);
 
   useEffect(() => {
-    if (state.status === 'playing') {
+    if (state.status === 'playing' && !gameLoopRef.current) {
       inputRef.current?.focus();
       lastTimeRef.current = undefined;
       enemyIdCounter = 0;
       enemySpawnTimerRef.current = 0;
       gameLoopRef.current = requestAnimationFrame(gameLoop);
+    } else if (state.status !== 'playing' && gameLoopRef.current) {
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = undefined;
     }
+
+    if (state.status === 'paused' || state.status === 'gameOver') {
+        inputRef.current?.blur();
+    }
+    
+    if (state.status === 'playing') {
+        inputRef.current?.focus();
+    }
+
+
     return () => {
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = undefined;
       }
       state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
       if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
     };
-  }, [state.status, gameLoop]);
+  }, [state.status, gameLoop, state.activePowerUps]);
 
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
@@ -456,11 +494,11 @@ export function CyberTypeDefense() {
         ref={gameAreaRef}
         className={cn(
           "relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
-          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive animate-screen-shake"
+          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
         )}
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
-        {state.status === 'playing' || state.status === 'gameOver' ? (
+        {state.status === 'playing' || state.status === 'gameOver' || state.status === 'paused' ? (
           <>
             <div className="absolute top-4 left-4 flex flex-col gap-2 text-primary p-2 rounded-lg bg-black/30 border border-primary/20 backdrop-blur-sm z-10">
                 <div className="flex items-center gap-4">
@@ -470,6 +508,11 @@ export function CyberTypeDefense() {
                 </div>
                 <div className="text-center text-xs text-muted-foreground font-mono">LEVEL: {state.level}</div>
             </div>
+
+            <Button variant="ghost" size="icon" className="absolute top-4 right-16 z-20 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
+                <Pause />
+            </Button>
+            
             <PowerUpDisplay activePowerUps={state.activePowerUps} />
             
             {state.enemies.map(enemy => (
@@ -500,7 +543,7 @@ export function CyberTypeDefense() {
                 ref={inputRef}
                 type="text"
                 className="w-full text-center bg-background/80 border-primary h-12 text-xl font-mono tracking-widest focus:bg-background focus:shadow-[0_0_20px] focus:shadow-primary/50 transition-all duration-300"
-                placeholder="TYPE HERE"
+                placeholder={state.status === 'playing' ? "TYPE HERE" : ''}
                 value={state.inputValue}
                 onChange={handleInputChange}
                 disabled={state.status !== 'playing'}
@@ -531,9 +574,19 @@ export function CyberTypeDefense() {
             onRestart={() => dispatch({ type: 'RESET_GAME' })}
           />
         )}
+        
+        {state.status === 'paused' && (
+            <PauseMenu 
+                onResume={() => dispatch({type: 'RESUME_GAME'})}
+                onRestart={() => dispatch({type: 'RESET_GAME'})}
+                onExit={() => dispatch({type: 'EXIT_GAME'})}
+            />
+        )}
       </div>
     </div>
   );
 }
+
+    
 
     
