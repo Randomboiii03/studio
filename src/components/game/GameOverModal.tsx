@@ -25,7 +25,7 @@ export default function GameOverModal({ score, onRestart }: GameOverModalProps) 
             <AlertDialogTitle className="text-center text-3xl text-primary tracking-wider">GAME OVER</AlertDialogTitle>
             <AlertDialogDescription className="text-center pt-4 text-lg">
               Firewall breached. Your final score is:
-              <p className="text-4xl font-bold text-primary py-2">{score.toLocaleString()}</p>
+              <div className="text-4xl font-bold text-primary py-2">{score.toLocaleString()}</div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="sm:justify-center gap-2">
