@@ -700,25 +700,29 @@ useEffect(() => {
     return () => clearTimeout(spawnTimeout);
 }, [status, level, enemies.length]);
 
-  // Power-up spawner
-  useEffect(() => {
+// Power-up spawner
+useEffect(() => {
     if (status !== 'playing') return;
+
+    let spawnerInterval: NodeJS.Timeout;
 
     // Wait 5 seconds before starting to spawn power-ups
     const initialDelay = setTimeout(() => {
-      const interval = setInterval(() => {
-        if (status === 'playing' && Math.random() < 0.25) { // 25% chance to spawn every 10 seconds
-          dispatch({ type: 'ADD_POWERUP' });
-        }
-      }, 10000);
-
-      // Cleanup function for the interval
-      return () => clearInterval(interval);
+        spawnerInterval = setInterval(() => {
+            // Only spawn if playing, not a boss level, and less than 2 powerups are on screen
+            if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
+                dispatch({ type: 'ADD_POWERUP' });
+            }
+        }, 10000);
     }, 5000);
 
-    // Cleanup function for the initial timeout
-    return () => clearTimeout(initialDelay);
-  }, [status, level]); // Also reset on level up
+    return () => {
+        clearTimeout(initialDelay);
+        if (spawnerInterval) {
+            clearInterval(spawnerInterval);
+        }
+    };
+}, [status]);
 
 
   // Effect and entity cleanup loop
@@ -858,8 +862,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
-
-    
-
