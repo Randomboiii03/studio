@@ -45,6 +45,7 @@ type PowerUp = {
   word: string;
   x: number;
   y: number;
+  vx: number;
   createdAt: number;
   status: 'alive' | 'dying';
 };
@@ -224,6 +225,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         y: isFrozen ? enemy.y : enemy.y + enemy.vy,
       }));
 
+      // Update power-up positions
+      let updatedPowerUps = state.powerUps.map(p => {
+          let newX = p.x + p.vx;
+          let newVx = p.vx;
+
+          if (newX < 50 || newX > GAME_WIDTH - 50) {
+              newVx = -p.vx;
+              newX = p.x + newVx;
+          }
+          
+          return {
+              ...p,
+              x: newX,
+              vx: newVx,
+          };
+      });
+
       // Update projectile positions
       const updatedProjectiles = state.projectiles.map(p => {
             const enemyTarget = updatedEnemies.find(e => e.id === p.targetId);
@@ -259,7 +277,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           ...state, 
           enemies: updatedEnemies, 
           projectiles: updatedProjectiles,
-          powerUps: state.powerUps.filter(p => now - p.createdAt < 7000 && p.status === 'alive'),
+          powerUps: updatedPowerUps.filter(p => now - p.createdAt < 7000 && p.status === 'alive'),
           activePowerUps: state.activePowerUps.filter(p => now < p.expiresAt),
       };
       
@@ -445,8 +463,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             id: powerUpIdCounter++,
             type,
             word: powerUpInfo.word,
-            x: Math.random() * (GAME_WIDTH - 100) + 50,
+            x: Math.random() * (GAME_WIDTH - 200) + 100,
             y: Math.random() * (GAME_HEIGHT / 2),
+            vx: (Math.random() - 0.5) * 2, // -1 to 1
             createdAt: Date.now(),
             status: 'alive'
         };
@@ -479,7 +498,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 if (nonBossEnemies.length === 0) break;
 
-                let currentCombo = newState.combo;
                 let scoreGained = 0;
                 
                 const explosions = nonBossEnemies.map(enemy => {
@@ -844,3 +862,4 @@ useEffect(() => {
     
 
     
+
