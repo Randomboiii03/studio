@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
@@ -21,7 +22,7 @@ type Enemy = {
   type: keyof typeof ENEMY_TYPES;
 };
 
-type Explosion = Omit<Enemy, 'speed'>;
+type Explosion = Omit<Enemy, 'speed' | 'id'> & { id: string };
 
 type ActivePowerUp = {
   name: typeof POWER_UPS[number]['name'];
@@ -56,7 +57,7 @@ type Action =
   | { type: 'ADD_ENEMY'; payload: Enemy }
   | { type: 'DESTROY_ENEMY'; payload: { enemy: Enemy } }
   | { type: 'ADD_EXPLOSION'; payload: Explosion }
-  | { type: 'REMOVE_EXPLOSION'; payload: { id: number } }
+  | { type: 'REMOVE_EXPLOSION'; payload: { id: string } }
   | { type: 'ACTIVATE_POWERUP'; payload: typeof POWER_UPS[number] }
   | { type: 'DEACTIVATE_POWERUP'; payload: { name: string } }
   | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
@@ -258,8 +259,9 @@ export function CyberTypeDefense() {
     dispatch({ type: 'DESTROY_ENEMY', payload: { enemy } });
     
     if (!isFrenzy) {
-        dispatch({ type: 'ADD_EXPLOSION', payload: { id: enemy.id, word: enemy.word, x: enemy.x, y: enemy.y, type: enemy.type } });
-        setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: enemy.id } }), 300);
+        const explosionId = `${enemy.id}-${Date.now()}`;
+        dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, word: enemy.word, x: enemy.x, y: enemy.y, type: enemy.type } });
+        setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 300);
     }
   };
   
