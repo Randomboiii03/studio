@@ -116,8 +116,7 @@ const initialState: GameState = {
   isShaking: false,
 };
 
-const spawnEnemy = (level: number): Enemy => {
-  const word = WORDS_LIST[Math.floor(Math.random() * WORDS_LIST.length)];
+const spawnEnemy = (level: number, word: string): Enemy => {
   const enemyTypes = Object.keys(ENEMY_TYPES).filter(t => t !== 'Boss') as (keyof typeof ENEMY_TYPES)[];
   const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
   
@@ -571,30 +570,46 @@ export function CyberTypeDefense() {
   }, [status]);
 
 
-  // Enemy Spawner
-  useEffect(() => {
-    if (status !== 'playing') return;
-    
-    if (enemies.length === 0) {
+// Enemy Spawner
+useEffect(() => {
+    if (status !== 'playing' || enemies.length > 0) return;
+
+    const spawn = () => {
+        if (status !== 'playing') return;
+
         if (level % 5 === 0) {
             // Boss level
-            setTimeout(() => {
-                if (status === 'playing') {
-                    dispatch({ type: 'ADD_ENEMY', payload: spawnBoss(level) });
-                }
-            }, 1000);
+            dispatch({ type: 'ADD_ENEMY', payload: spawnBoss(level) });
         } else {
-            // Regular level
-            const waveSize = Math.min(5 + level, 20);
-            for(let i = 0; i < waveSize; i++) {
-                setTimeout(() => {
-                    if(status === 'playing') {
-                        dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level) });
-                    }
-                }, i * (2000 / (level * 0.5 + 1)));
+            // Regular level: ensure unique words per wave
+            const waveSize = Math.min(5 + level, 15);
+            const availableWords = [...WORDS_LIST];
+            const waveWords: string[] = [];
+
+            for (let i = 0; i < waveSize; i++) {
+                if (availableWords.length === 0) break; // No more unique words
+                const wordIndex = Math.floor(Math.random() * availableWords.length);
+                waveWords.push(availableWords.splice(wordIndex, 1)[0]);
             }
+            
+            // Stagger the spawning of enemies
+            const baseInterval = 1500;
+            const levelMultiplier = Math.max(0.2, 1 - (level * 0.05));
+            
+            waveWords.forEach((word, i) => {
+                setTimeout(() => {
+                    if (status === 'playing') {
+                        dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level, word) });
+                    }
+                }, i * baseInterval * levelMultiplier);
+            });
         }
-    }
+    };
+    
+    // Add a slight delay before the next wave starts
+    const spawnTimeout = setTimeout(spawn, 1000);
+    
+    return () => clearTimeout(spawnTimeout);
 }, [status, level, enemies.length]);
 
   // Power-up spawner
@@ -736,3 +751,5 @@ export function CyberTypeDefense() {
     </div>
   );
 }
+
+    
