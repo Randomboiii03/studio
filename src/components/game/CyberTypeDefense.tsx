@@ -500,7 +500,7 @@ export function CyberTypeDefense() {
         ref={gameAreaRef}
         className={cn(
           "relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
-          state.lives < INITIAL_LIVES && state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
+          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
         )}
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
@@ -532,7 +532,7 @@ export function CyberTypeDefense() {
             {state.explosions.map(explosion => (
               <div key={explosion.id} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
+                  <div key={`${explosion.id}-${i}`} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
                       width: `${Math.random() * 6 + 2}px`,
                       height: `${Math.random() * 6 + 2}px`,
                       transform: `translate(${Math.random() * 40 - 20}px, ${Math.random() * 40 - 20}px)`,
@@ -593,9 +593,3 @@ export function CyberTypeDefense() {
     </div>
   );
 }
-
-    
-
-    
-
-    
