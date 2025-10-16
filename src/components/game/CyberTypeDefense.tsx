@@ -229,7 +229,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 };
 
 const StatItem = ({ icon: Icon, value, label, className }: { icon: React.ElementType, value: string | number, label: string, className?: string }) => (
-  <div className={`flex items-center gap-2 font-mono text-lg ${className}`}>
+  <div className={cn("flex items-center gap-2 font-mono text-lg", className)}>
       <Icon className="w-5 h-5" />
       <div className="flex items-baseline gap-1.5">
           <span className="font-bold text-2xl tracking-tighter">{value}</span>
@@ -291,6 +291,9 @@ export function CyberTypeDefense() {
     });
     
     switch(powerUp.name) {
+      case 'Frenzy':
+        state.enemies.forEach(enemy => destroyEnemy(enemy, true));
+        break;
       case 'Freeze':
         dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: true } });
         break;
@@ -302,9 +305,6 @@ export function CyberTypeDefense() {
         break;
       case 'Overclock':
         dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 2 } });
-        break;
-      case 'Frenzy':
-        state.enemies.forEach(enemy => destroyEnemy(enemy, true));
         break;
       case 'Heal':
         dispatch({ type: 'SET_LIVES', payload: Math.min(INITIAL_LIVES, state.lives + 3) });
@@ -476,9 +476,13 @@ export function CyberTypeDefense() {
           </>
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-8 text-center">
-            <h2 className="text-4xl font-bold text-primary">Prepare for Battle</h2>
-            <p className="text-muted-foreground max-w-md">The system is under attack. Use your keyboard as your weapon to eliminate threats before they breach the firewall.</p>
-            <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50">
+            <h1 className="font-headline text-5xl md:text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-neutral-50 to-neutral-400 py-2">
+              CyberType Defense
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
+              Type the words to destroy falling cyber threats. Activate powerful abilities by typing special keywords. How long can you survive?
+            </p>
+            <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50 mt-4">
               Start Defense Protocol
             </Button>
           </div>
