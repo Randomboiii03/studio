@@ -360,7 +360,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             isShaking: true,
         };
         
-        // This is the fix for the level progression bug
         const remainingEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
         if (state.enemies.length > 0 && remainingEnemies.length === 0) {
           newState.level = state.level + 1;
@@ -733,7 +732,8 @@ useEffect(() => {
               <Turret />
             </div>
 
-            <div className="absolute bottom-4 right-4 w-80">
+            <div className="absolute bottom-4 right-4 w-80 flex flex-col items-center gap-2">
+                 <div className="text-center text-xs text-muted-foreground font-mono">LEVEL: {level}</div>
                 <Input
                     ref={inputRef}
                     type="text"
@@ -750,19 +750,15 @@ useEffect(() => {
                 />
             </div>
             
-            <div className="absolute bottom-4 left-4 flex justify-between items-center z-20">
-                <div className="flex-1 flex justify-start items-center gap-4">
-                     <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
-                     <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
-                     {shield > 0 && <StatItem icon={ShieldIcon} value={shield} label="Shield" className="text-cyan-400" />}
-                </div>
-
-                <div className="flex-1 flex justify-end items-center gap-4">
-                    <div className="flex items-center gap-4">
-                        {activePowerUps.map(p => <ActivePowerUpIndicator key={p.type} powerUp={p} />)}
-                    </div>
+            <div className="absolute bottom-4 left-4 z-20">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                    <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
+                    {shield > 0 && <StatItem icon={ShieldIcon} value={shield} label="Shield" className="text-cyan-400" />}
                     <StatItem icon={Zap} value={`x${combo}`} label="Combo" className="text-yellow-400" />
-                    <div className="text-center text-xs text-muted-foreground font-mono w-24">LEVEL: {level}</div>
+                    <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
+                </div>
+                <div className="flex items-center gap-4 mt-2">
+                    {activePowerUps.map(p => <ActivePowerUpIndicator key={p.type} powerUp={p} />)}
                 </div>
             </div>
           </>
