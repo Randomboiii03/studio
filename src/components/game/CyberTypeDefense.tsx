@@ -456,15 +456,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         switch (type) {
             case 'Nuke': {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
+                if (nonBossEnemies.length === 0) break;
+
                 const explosions = nonBossEnemies.map(enemy => ({
                     id: `expl-${enemy.id}-${effectIdCounter++}`,
                     x: enemy.x,
                     y: enemy.y,
                     color: ENEMY_TYPES[enemy.type].className,
                 }));
-                newState.enemies = newState.enemies.map(e => !e.isBoss ? {...e, status: 'dying'} : e);
+                
+                const scoreGained = nonBossEnemies.reduce((total, enemy) => {
+                    return total + (enemy.words[enemy.currentWordIndex].length * 10 * (newState.combo + total / 10 + 1));
+                }, 0);
+                
+                newState.enemies = newState.enemies.map(e => (!e.isBoss && e.status === 'alive') ? {...e, status: 'dying'} : e);
                 newState.explosions = [...newState.explosions, ...explosions];
-                newState.score += nonBossEnemies.length * 50;
+                newState.score += scoreGained;
+                newState.combo += nonBossEnemies.length;
                 newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
             }
@@ -782,3 +790,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
