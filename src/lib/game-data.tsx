@@ -1,4 +1,4 @@
-import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull } from 'lucide-react';
+import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull, Snowflake, Bomb } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export const WORDS_LIST = [
@@ -37,13 +37,13 @@ export const BOSS_WORDS_LIST = [
 ];
 
 
-export type EnemyType = {
+export type EnemyTypeInfo = {
   icon: LucideIcon;
   className: string;
   speed: number;
 };
 
-export const ENEMY_TYPES: { [key: string]: EnemyType } = {
+export const ENEMY_TYPES: { [key: string]: EnemyTypeInfo } = {
     Malware: { icon: Bug, className: 'text-threat-malware', speed: 1 },
     Phishing: { icon: Shield, className: 'text-threat-phishing', speed: 1.2 },
     DDoS: { icon: Siren, className: 'text-threat-ddos', speed: 0.8 },
@@ -52,3 +52,37 @@ export const ENEMY_TYPES: { [key: string]: EnemyType } = {
     Adware: { icon: Bot, className: 'text-threat-adware', speed: 0.9 },
     Boss: { icon: Skull, className: 'text-destructive', speed: 0.5 },
 };
+
+export type PowerUpType = 'Freeze' | 'Nuke' | 'Shield';
+
+export type PowerUpInfo = {
+    icon: LucideIcon;
+    className: string;
+    duration: number;
+    effect: {
+        value: number;
+    };
+};
+
+export const POWER_UP_TYPES: Record<PowerUpType, PowerUpInfo> = {
+    Freeze: {
+        icon: Snowflake,
+        className: 'text-cyan-400',
+        duration: 5000, // 5 seconds
+        effect: { value: 0 },
+    },
+    Nuke: {
+        icon: Bomb,
+        className: 'text-destructive',
+        duration: 0,
+        effect: { value: 0 },
+    },
+    Shield: {
+        icon: Shield,
+        className: 'text-blue-500',
+        duration: 0, 
+        effect: { value: 5 }, // Grants 5 shield points
+    },
+};
+
+    

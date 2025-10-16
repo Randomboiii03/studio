@@ -4,13 +4,15 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, WORDS_LIST, BOSS_WORDS_LIST } from '@/lib/game-data';
+import { ENEMY_TYPES, WORDS_LIST, BOSS_WORDS_LIST, POWER_UP_TYPES } from '@/lib/game-data';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
 import PauseMenu from './PauseMenu';
+import PowerUpComponent from './PowerUp';
 import { cn } from '@/lib/utils';
-import { Award, Heart, Pause, Zap } from 'lucide-react';
+import { Award, Heart, Pause, Zap, Shield as ShieldIcon, Snowflake, Bomb } from 'lucide-react';
+import type { PowerUpType } from '@/lib/game-data';
 
 type Enemy = {
   id: number;
@@ -37,15 +39,31 @@ type Projectile = {
 
 type Explosion = { id: string; x: number; y: number; color: string; };
 
+type PowerUp = {
+  id: number;
+  type: PowerUpType;
+  x: number;
+  y: number;
+  createdAt: number;
+};
+
+type ActivePowerUp = {
+  type: PowerUpType;
+  expiresAt: number;
+};
+
 type GameState = {
   status: 'idle' | 'playing' | 'gameOver' | 'paused';
   score: number;
   lives: number;
+  shield: number;
   combo: number;
   level: number;
   enemies: Enemy[];
   projectiles: Projectile[];
   explosions: Explosion[];
+  powerUps: PowerUp[];
+  activePowerUps: ActivePowerUp[];
   inputValue: string;
   isShaking: boolean;
 };
@@ -65,7 +83,10 @@ type Action =
   | { type: 'CLEANUP_EFFECTS' }
   | { type: 'TRIGGER_SHAKE' }
   | { type: 'STOP_SHAKE' }
-  | { type: 'ADD_ENEMY', payload: Enemy };
+  | { type: 'ADD_ENEMY', payload: Enemy }
+  | { type: 'ADD_POWERUP' }
+  | { type: 'COLLECT_POWERUP', payload: { powerUpId: number } }
+  | { type: 'ACTIVATE_POWERUP', payload: { type: PowerUpType } };
 
 
 const INITIAL_LIVES = 10;
@@ -75,16 +96,20 @@ const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
 const TURRET_HITBOX_Y = GAME_HEIGHT - 80;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
+let powerUpIdCounter = 0;
 
 const initialState: GameState = {
   status: 'idle',
   score: 0,
   lives: INITIAL_LIVES,
+  shield: 0,
   combo: 0,
   level: 1,
   enemies: [],
   projectiles: [],
   explosions: [],
+  powerUps: [],
+  activePowerUps: [],
   inputValue: '',
   isShaking: false,
 };
@@ -149,6 +174,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'START_GAME':
       enemyIdCounter = 0;
       effectIdCounter = 0;
+      powerUpIdCounter = 0;
       return {
         ...initialState,
         status: 'playing',
@@ -156,6 +182,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'RESET_GAME':
       enemyIdCounter = 0;
       effectIdCounter = 0;
+      powerUpIdCounter = 0;
       return { ...initialState, status: 'playing' };
 
     case 'EXIT_GAME':
@@ -173,11 +200,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'GAME_TICK': {
       if (state.status !== 'playing') return state;
 
+      const now = Date.now();
+      const isFrozen = state.activePowerUps.some(p => p.type === 'Freeze');
+      
       // Update enemy positions
       const updatedEnemies = state.enemies.map(enemy => ({
         ...enemy,
-        x: enemy.x + enemy.vx,
-        y: enemy.y + enemy.vy,
+        x: isFrozen ? enemy.x : enemy.x + enemy.vx,
+        y: isFrozen ? enemy.y : enemy.y + enemy.vy,
       }));
 
       // Update projectile positions
@@ -211,7 +241,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           }
       });
       
-      let nextState: GameState = { ...state, enemies: updatedEnemies, projectiles: updatedProjectiles };
+      let nextState: GameState = { 
+          ...state, 
+          enemies: updatedEnemies, 
+          projectiles: updatedProjectiles,
+          powerUps: state.powerUps.filter(p => now - p.createdAt < 7000),
+          activePowerUps: state.activePowerUps.filter(p => now < p.expiresAt),
+      };
       
       hitProjectiles.forEach(targetId => {
         nextState = gameReducer(nextState, { type: 'PROJECTILE_HIT', payload: { targetId } });
@@ -274,14 +310,12 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const enemyIndex = updatedEnemies.findIndex(e => e.id === targetId);
 
       if (enemy.isBoss && enemy.currentWordIndex < enemy.words.length - 1) {
-          // Boss has more words, advance to the next word
           updatedEnemies[enemyIndex] = {
               ...enemy,
               currentWordIndex: enemy.currentWordIndex + 1,
-              status: 'alive' // Keep it alive
+              status: 'alive'
           };
       } else {
-          // It's a regular enemy or the last word of a boss
           updatedEnemies[enemyIndex] = { ...enemy, status: 'dying' };
       }
 
@@ -297,15 +331,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     
     case 'ENEMY_REACHED_END': {
         const enemy = state.enemies.find(e => e.id === action.payload.enemyId);
-        const livesLost = enemy?.isBoss ? 5 : 1;
-        const newLives = state.lives - livesLost;
+        if (!enemy) return state;
+
+        const damage = enemy.isBoss ? 5 : 1;
+        let shieldDamage = Math.min(state.shield, damage);
+        let lifeDamage = damage - shieldDamage;
+        
+        const newShield = state.shield - shieldDamage;
+        const newLives = state.lives - lifeDamage;
 
         if (newLives <= 0) {
-            return { ...state, status: 'gameOver', lives: 0, enemies: [], projectiles: [] };
+            return { ...state, status: 'gameOver', lives: 0, shield: 0, enemies: [], projectiles: [] };
         }
+
         return {
             ...state,
             lives: newLives,
+            shield: newShield,
             combo: 0,
             enemies: state.enemies.filter(e => e.id !== action.payload.enemyId),
             isShaking: true,
@@ -347,7 +389,64 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       
     case 'STOP_SHAKE':
       return {...state, isShaking: false};
+      
+    case 'ADD_POWERUP': {
+        const powerUpTypes = Object.keys(POWER_UP_TYPES) as PowerUpType[];
+        const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+        const newPowerUp: PowerUp = {
+            id: powerUpIdCounter++,
+            type,
+            x: Math.random() * (GAME_WIDTH - 100) + 50,
+            y: Math.random() * (GAME_HEIGHT / 2),
+            createdAt: Date.now()
+        };
+        return { ...state, powerUps: [...state.powerUps, newPowerUp] };
+    }
 
+    case 'COLLECT_POWERUP': {
+        const powerUp = state.powerUps.find(p => p.id === action.payload.powerUpId);
+        if (!powerUp) return state;
+        return {
+            ...state,
+            powerUps: state.powerUps.filter(p => p.id !== action.payload.powerUpId),
+            ...gameReducer(state, { type: 'ACTIVATE_POWERUP', payload: { type: powerUp.type } })
+        };
+    }
+
+    case 'ACTIVATE_POWERUP': {
+        const { type } = action.payload;
+        const powerUpInfo = POWER_UP_TYPES[type];
+        const now = Date.now();
+        
+        let newState = { ...state };
+        
+        switch (type) {
+            case 'Nuke': {
+                const nonBossEnemies = newState.enemies.filter(e => !e.isBoss);
+                const explosions = nonBossEnemies.map(enemy => ({
+                    id: `expl-${enemy.id}-${effectIdCounter++}`,
+                    x: enemy.x,
+                    y: enemy.y,
+                    color: ENEMY_TYPES[enemy.type].className,
+                }));
+                newState.enemies = newState.enemies.map(e => !e.isBoss ? {...e, status: 'dying'} : e);
+                newState.explosions = [...newState.explosions, ...explosions];
+                newState.score += nonBossEnemies.length * 50;
+                break;
+            }
+            case 'Shield':
+                newState.shield = Math.min(state.shield + powerUpInfo.effect.value, 10);
+                break;
+            case 'Freeze':
+                newState.activePowerUps = [
+                    ...newState.activePowerUps.filter(p => p.type !== 'Freeze'),
+                    { type: 'Freeze', expiresAt: now + powerUpInfo.duration }
+                ];
+                break;
+        }
+        return newState;
+    }
+    
     default:
       return state;
   }
@@ -364,13 +463,27 @@ const StatItem = ({ icon: Icon, value, label, className }: { icon: React.Element
   </div>
 );
 
+const ActivePowerUpIndicator = ({ powerUp }: { powerUp: ActivePowerUp }) => {
+    const powerUpInfo = POWER_UP_TYPES[powerUp.type];
+    const Icon = powerUpInfo.icon;
+    const remainingTime = Math.max(0, (powerUp.expiresAt - Date.now()) / 1000);
+
+    return (
+        <div className="flex items-center gap-2 text-white font-mono">
+            <Icon className={cn("w-6 h-6", powerUpInfo.className)} />
+            <span>{remainingTime.toFixed(1)}s</span>
+        </div>
+    );
+};
+
+
 export function CyberTypeDefense() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const { status, score, lives, combo, level, enemies, projectiles, explosions, inputValue, isShaking } = state;
+  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, inputValue, isShaking } = state;
 
   useEffect(() => {
     if (isShaking) {
@@ -400,8 +513,9 @@ export function CyberTypeDefense() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && status === 'playing') {
       dispatch({ type: 'SUBMIT_WORD' });
-    } else if (e.key === 'Escape' && status === 'playing') {
-      dispatch({ type: 'PAUSE_GAME' });
+    } else if (e.key === 'Escape' && (status === 'playing' || status === 'paused')) {
+        e.preventDefault();
+        dispatch({ type: status === 'playing' ? 'PAUSE_GAME' : 'RESUME_GAME' });
     }
   };
 
@@ -452,6 +566,17 @@ export function CyberTypeDefense() {
     }
 }, [status, level, enemies.length]);
 
+  // Power-up spawner
+  useEffect(() => {
+      if (status !== 'playing') return;
+      const interval = setInterval(() => {
+          if (Math.random() < 0.25) { // 25% chance to spawn every 10 seconds
+              dispatch({ type: 'ADD_POWERUP' });
+          }
+      }, 10000);
+      return () => clearInterval(interval);
+  }, [status]);
+
 
   // Effect and entity cleanup loop
   useEffect(() => {
@@ -500,6 +625,14 @@ export function CyberTypeDefense() {
             {enemies.map(enemy => (
               <EnemyComponent key={enemy.id} word={enemy.words[enemy.currentWordIndex]} {...enemy} />
             ))}
+
+            {powerUps.map(p => (
+                <PowerUpComponent
+                    key={p.id}
+                    {...p}
+                    onClick={() => dispatch({ type: 'COLLECT_POWERUP', payload: { powerUpId: p.id } })}
+                />
+            ))}
             
             {projectiles.map(p => (
               <div key={p.id} className="absolute w-2 h-2 bg-primary rounded-full shadow-[0_0_10px] shadow-primary" style={{ left: p.x, top: p.y, transform: `translate(-50%, -50%)` }} />
@@ -508,7 +641,7 @@ export function CyberTypeDefense() {
             {explosions.map(explosion => (
               <div key={explosion.id} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
+                  <div key={`${explosion.id}-${i}`} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
                       width: `${Math.random() * 6 + 2}px`,
                       height: `${Math.random() * 6 + 2}px`,
                       transform: `translate(${Math.random() * 40 - 20}px, ${Math.random() * 40 - 20}px)`,
@@ -521,9 +654,10 @@ export function CyberTypeDefense() {
             <Turret />
             
             <div className="absolute bottom-4 left-0 right-0 px-4 flex justify-between items-end z-10 pointer-events-none">
-                <div className="flex-1 flex justify-start gap-4">
+                <div className="flex-1 flex justify-start items-center gap-4">
                      <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
                      <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
+                     {shield > 0 && <StatItem icon={ShieldIcon} value={shield} label="Shield" className="text-cyan-400" />}
                 </div>
 
                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 pointer-events-auto">
@@ -543,12 +677,14 @@ export function CyberTypeDefense() {
                     />
                 </div>
 
-                <div className="flex-1 flex justify-end gap-4">
+                <div className="flex-1 flex justify-end items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        {activePowerUps.map(p => <ActivePowerUpIndicator key={p.type} powerUp={p} />)}
+                    </div>
                     <StatItem icon={Zap} value={`x${combo}`} label="Combo" className="text-yellow-400" />
                     <div className="text-center text-xs text-muted-foreground font-mono w-24">LEVEL: {level}</div>
                 </div>
             </div>
-
           </>
         )}
 
@@ -570,3 +706,5 @@ export function CyberTypeDefense() {
     </div>
   );
 }
+
+    
