@@ -68,6 +68,7 @@ type GameState = {
   activePowerUps: ActivePowerUp[];
   inputValue: string;
   isShaking: boolean;
+  nukeEffect: boolean;
 };
 
 type Action =
@@ -88,7 +89,9 @@ type Action =
   | { type: 'ADD_ENEMY', payload: Enemy }
   | { type: 'ADD_POWERUP' }
   | { type: 'POWERUP_HIT'; payload: { powerUpId: number } }
-  | { type: 'ACTIVATE_POWERUP', payload: { type: PowerUpType } };
+  | { type: 'ACTIVATE_POWERUP', payload: { type: PowerUpType } }
+  | { type: 'TRIGGER_NUKE_EFFECT' }
+  | { type: 'STOP_NUKE_EFFECT' };
 
 
 const INITIAL_LIVES = 10;
@@ -114,6 +117,7 @@ const initialState: GameState = {
   activePowerUps: [],
   inputValue: '',
   isShaking: false,
+  nukeEffect: false,
 };
 
 const spawnEnemy = (level: number, word: string): Enemy => {
@@ -462,6 +466,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 newState.enemies = newState.enemies.map(e => !e.isBoss ? {...e, status: 'dying'} : e);
                 newState.explosions = [...newState.explosions, ...explosions];
                 newState.score += nonBossEnemies.length * 50;
+                newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
             }
             case 'Shield':
@@ -476,6 +481,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         }
         return newState;
     }
+
+    case 'TRIGGER_NUKE_EFFECT':
+        return { ...state, nukeEffect: true };
+    
+    case 'STOP_NUKE_EFFECT':
+        return { ...state, nukeEffect: false };
+
     
     default:
       return state;
@@ -512,8 +524,9 @@ export function CyberTypeDefense() {
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
+  const nukeTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, inputValue, isShaking } = state;
+  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, inputValue, isShaking, nukeEffect } = state;
 
   useEffect(() => {
     if (isShaking) {
@@ -535,6 +548,18 @@ export function CyberTypeDefense() {
     };
   }, [isShaking]);
   
+  useEffect(() => {
+      if (nukeEffect) {
+          if (nukeTimeoutRef.current) clearTimeout(nukeTimeoutRef.current);
+          nukeTimeoutRef.current = setTimeout(() => {
+              dispatch({ type: 'STOP_NUKE_EFFECT' });
+          }, 500);
+      }
+      return () => {
+        if (nukeTimeoutRef.current) clearTimeout(nukeTimeoutRef.current);
+      };
+  }, [nukeEffect]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (status !== 'playing') return;
     dispatch({ type: 'INPUT_CHANGE', payload: e.target.value.toLowerCase() });
@@ -638,7 +663,9 @@ useEffect(() => {
         inputRef.current?.focus();
     }
   }, [status]);
-
+  
+  const isFrozen = activePowerUps.some(p => p.type === 'Freeze');
+  const isShielded = shield > 0;
 
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
@@ -664,7 +691,13 @@ useEffect(() => {
           </div>
         ) : (
           <>
-            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-20 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
+            <div className="absolute inset-0 pointer-events-none z-10">
+                {isFrozen && <div className="absolute inset-0 bg-cyan-400/20 animate-pulse" />}
+                {nukeEffect && <div className="absolute inset-0 bg-white animate-fade-dots" />}
+                {isShielded && <div className="absolute inset-0 border-[6px] border-blue-500/50 rounded-lg animate-pulse" />}
+            </div>
+
+            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-30 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
                 <Pause />
             </Button>
             
@@ -680,11 +713,11 @@ useEffect(() => {
             ))}
             
             {projectiles.map(p => (
-              <div key={p.id} className="absolute w-2 h-2 bg-primary rounded-full shadow-[0_0_10px] shadow-primary" style={{ left: p.x, top: p.y, transform: `translate(-50%, -50%)` }} />
+              <div key={p.id} className="absolute w-2 h-2 bg-primary rounded-full shadow-[0_0_10px] shadow-primary z-20" style={{ left: p.x, top: p.y, transform: `translate(-50%, -50%)` }} />
             ))}
 
             {explosions.map(explosion => (
-              <div key={explosion.id} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
+              <div key={explosion.id} className="absolute z-20" style={{ left: explosion.x, top: explosion.y }}>
                 {[...Array(5)].map((_, i) => (
                   <div key={`${explosion.id}-${i}`} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
                       width: `${Math.random() * 6 + 2}px`,
@@ -698,7 +731,7 @@ useEffect(() => {
 
             <Turret />
             
-            <div className="absolute bottom-4 left-0 right-0 px-4 flex justify-between items-end z-10 pointer-events-none">
+            <div className="absolute bottom-4 left-0 right-0 px-4 flex justify-between items-end z-20 pointer-events-none">
                 <div className="flex-1 flex justify-start items-center gap-4">
                      <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
                      <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
@@ -751,5 +784,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
