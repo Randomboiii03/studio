@@ -46,6 +46,7 @@ type PowerUp = {
   x: number;
   y: number;
   vx: number;
+  vy: number;
   createdAt: number;
   status: 'alive' | 'dying';
 };
@@ -228,17 +229,25 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       // Update power-up positions
       let updatedPowerUps = state.powerUps.map(p => {
           let newX = p.x + p.vx;
+          let newY = p.y + p.vy;
           let newVx = p.vx;
+          let newVy = p.vy;
 
           if (newX < 50 || newX > GAME_WIDTH - 50) {
               newVx = -p.vx;
               newX = p.x + newVx;
           }
+          if (newY < 50 || newY > GAME_HEIGHT / 2) {
+              newVy = -p.vy;
+              newY = p.y + newVy;
+          }
           
           return {
               ...p,
               x: newX,
+              y: newY,
               vx: newVx,
+              vy: newVy
           };
       });
 
@@ -464,8 +473,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             type,
             word: powerUpInfo.word,
             x: Math.random() * (GAME_WIDTH - 200) + 100,
-            y: Math.random() * (GAME_HEIGHT / 2),
+            y: Math.random() * (GAME_HEIGHT / 2 - 100) + 50,
             vx: (Math.random() - 0.5) * 2, // -1 to 1
+            vy: (Math.random() - 0.5) * 1, // -0.5 to 0.5
             createdAt: Date.now(),
             status: 'alive'
         };
@@ -498,21 +508,19 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 if (nonBossEnemies.length === 0) break;
 
-                let scoreGained = 0;
-                
-                const explosions = nonBossEnemies.map(enemy => {
-                    scoreGained += 50; // Flat score per nuked enemy
-                    return {
+                nonBossEnemies.forEach(enemy => {
+                    const scoreGained = 50; // Flat score per nuked enemy
+                    const explosion: Explosion = {
                         id: `expl-${enemy.id}-${effectIdCounter++}`,
                         x: enemy.x,
                         y: enemy.y,
                         color: ENEMY_TYPES[enemy.type].className,
                     };
+                    newState.score += scoreGained;
+                    newState.explosions.push(explosion);
                 });
                 
                 newState.enemies = newState.enemies.map(e => (!e.isBoss && e.status === 'alive') ? {...e, status: 'dying'} : e);
-                newState.explosions = [...newState.explosions, ...explosions];
-                newState.score += scoreGained;
                 newState.lastHitTime = Date.now();
                 newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
