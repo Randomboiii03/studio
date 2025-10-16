@@ -76,7 +76,7 @@ type Action =
   | { type: 'REMOVE_PROJECTILE'; payload: { id: string } }
   | { type: 'ADD_EXPLOSION'; payload: Explosion }
   | { type: 'REMOVE_EXPLOSION'; payload: { id: string } }
-  | { type: 'ACTIVATE_POWERUP'; payload: typeof POWER_UPS[number] }
+  | { type: 'ACTIVATE_POWERUP'; payload: { powerUp: typeof POWER_UPS[number], timeoutId: NodeJS.Timeout } }
   | { type: 'DEACTIVATE_POWERUP'; payload: { name: string } }
   | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
   | { type: 'SET_LIVES'; payload: number }
@@ -113,6 +113,8 @@ const initialState: GameState = {
 };
 
 let enemyIdCounter = 0;
+let effectIdCounter = 0;
+
 
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -149,7 +151,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     
     case 'ENEMY_HIT': {
       const enemy = state.enemies.find(e => e.id === action.payload.enemyId);
-      if (!enemy) return state;
+      if (!enemy || enemy.status !== 'alive') return state;
 
       const scoreGained = enemy.word.length * 10 * state.combo * state.effects.scoreMultiplier;
       return {
@@ -203,28 +205,25 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return true;
       });
       
-      let newState = { ...state, enemies: newEnemies, lives: newLives, combo: newCombo };
+      let newState: GameState = { ...state, enemies: newEnemies, lives: newLives, combo: newCombo };
 
       if (triggerShake) {
         newState.isShaking = true;
       }
 
       if (gameOver) {
-        return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [], isShaking: false };
+        return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [], projectiles: [], isShaking: false };
       }
       
       const newProjectiles = state.projectiles.map(p => {
         const dx = p.targetX - p.x;
         const dy = p.targetY - p.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 25) return null;
         const moveX = (dx / dist) * 25; // Projectile speed
         const moveY = (dy / dist) * 25;
         return {...p, x: p.x + moveX, y: p.y + moveY};
-      }).filter(p => {
-        const dx = p.targetX - p.x;
-        const dy = p.targetY - p.y;
-        return (dx * dx + dy * dy) > 20*20;
-      });
+      }).filter(Boolean) as Projectile[];
 
 
       const newLevel = Math.floor(state.score / 1000) + 1;
@@ -239,7 +238,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return { ...state, explosions: state.explosions.filter(e => e.id !== action.payload.id) };
 
     case 'ACTIVATE_POWERUP': {
-      const { payload: powerUp } = action;
+      const { powerUp, timeoutId } = action.payload;
       
       const existingPowerup = state.activePowerUps.find(p => p.name === powerUp.name);
       if (existingPowerup) {
@@ -248,17 +247,20 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       
       const otherPowerups = state.activePowerUps.filter(p => p.name !== powerUp.name);
 
-      return { ...state, activePowerUps: [...otherPowerups, action.payload as unknown as ActivePowerUp] };
+      return { ...state, activePowerUps: [...otherPowerups, { ...powerUp, timeoutId } ] };
     }
     case 'DEACTIVATE_POWERUP': {
-      return { ...state, activePowerUps: state.activePowerUps.filter(p => p.name !== action.payload.name) };
+      const { name } = action.payload;
+      const powerUp = state.activePowerUps.find(p => p.name === name);
+      if (powerUp) clearTimeout(powerUp.timeoutId);
+      return { ...state, activePowerUps: state.activePowerUps.filter(p => p.name !== name) };
     }
     
     case 'SET_EFFECTS':
         return { ...state, effects: { ...state.effects, ...action.payload } };
 
     case 'SET_LIVES':
-        return { ...state, lives: action.payload };
+        return { ...state, lives: Math.min(INITIAL_LIVES, action.payload) };
     
     case 'TRIGGER_SHAKE':
       return {...state, isShaking: true};
@@ -308,31 +310,29 @@ export function CyberTypeDefense() {
     }
   }, [state.isShaking]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (state.status !== 'playing') return;
-    dispatch({ type: 'INPUT_CHANGE', value: e.target.value });
-  };
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && state.status === 'playing') {
-      const value = state.inputValue.trim().toLowerCase();
-      if (!value) return;
 
-      const powerUp = POWER_UPS.find(p => p.keywords.includes(value));
-      if (powerUp) {
-        activatePowerUp(powerUp);
-        dispatch({ type: 'INPUT_CHANGE', value: '' });
-        return;
-      }
+  const destroyEnemy = useCallback((enemy: Enemy) => {
+    if (!enemy || enemy.status !== 'alive') return;
 
-      const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
-      if (matchedEnemy) {
-        destroyEnemy(matchedEnemy);
-      }
+    dispatch({ type: 'ENEMY_HIT', payload: { enemyId: enemy.id } });
+
+    const projectileId = `proj-${enemy.id}-${Date.now()}`;
+    dispatch({ type: 'ADD_PROJECTILE', payload: { id: projectileId, x: TURRET_POSITION.x, y: TURRET_POSITION.y, targetX: enemy.x, targetY: enemy.y } });
+    
+    setTimeout(() => {
+      dispatch({ type: 'REMOVE_PROJECTILE', payload: { id: projectileId } });
+      const explosionId = `expl-${enemy.id}-${Date.now()}`;
+      const typeData = ENEMY_TYPES[enemy.type];
+      dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
       
-      dispatch({ type: 'INPUT_CHANGE', value: '' });
-    }
-  };
+      setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
+
+      setTimeout(() => {
+        dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } });
+      }, 300);
+    }, 200); // projectile travel time
+  }, []);
+  
   
   const activatePowerUp = useCallback((powerUp: typeof POWER_UPS[number]) => {
     toast({
@@ -344,7 +344,14 @@ export function CyberTypeDefense() {
 
     switch(powerUp.name) {
       case 'Frenzy':
-        state.enemies.filter(e => e.status === 'alive').forEach(enemy => destroyEnemy(enemy, true));
+        state.enemies.forEach(enemy => {
+            if(enemy.status === 'alive') destroyEnemy(enemy);
+        });
+        break;
+      case 'Nuke':
+        state.enemies.forEach(enemy => {
+            if(enemy.status === 'alive') destroyEnemy(enemy);
+        });
         break;
       case 'Freeze':
         dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: true } });
@@ -359,67 +366,54 @@ export function CyberTypeDefense() {
         dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 2 } });
         break;
       case 'Heal':
-        dispatch({ type: 'SET_LIVES', payload: Math.min(INITIAL_LIVES, state.lives + 3) });
-        break;
-      case 'Nuke':
-        state.enemies.filter(e => e.status === 'alive').forEach(enemy => destroyEnemy(enemy, true));
+        dispatch({ type: 'SET_LIVES', payload: state.lives + 3 });
         break;
       case 'King':
-        dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } }); // For King, we can re-use shield
+        dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } });
         break;
     }
     
-    if(!isInstant) {
-        const timeoutId = setTimeout(() => {
-            dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
-            switch(powerUp.name) {
+    const timeoutId = setTimeout(() => {
+        dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
+        if(!isInstant) {
+             switch(powerUp.name) {
                 case 'Freeze': dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: false } }); break;
                 case 'Shield': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
                 case 'Slowdown': dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: false } }); break;
                 case 'Overclock': dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 1 } }); break;
                 case 'King': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
             }
-        }, powerUp.duration);
-        
-        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId } });
-    } else {
-        const timeoutId = setTimeout(() => {
-            dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
-        }, 500);
-        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId } });
-    }
-  }, [state.enemies, state.lives, toast]);
-  
-
-  const destroyEnemy = useCallback((enemy: Enemy, isPowerUp = false) => {
-    if (enemy.status !== 'alive') return;
-
-    dispatch({ type: 'ENEMY_HIT', payload: { enemyId: enemy.id } });
-
-    const projectileId = `proj-${enemy.id}-${Date.now()}`;
-    dispatch({ type: 'ADD_PROJECTILE', payload: { id: projectileId, x: TURRET_POSITION.x, y: TURRET_POSITION.y, targetX: enemy.x, targetY: enemy.y } });
+        }
+    }, isInstant ? 500 : powerUp.duration);
     
-    setTimeout(() => {
-      dispatch({ type: 'REMOVE_PROJECTILE', payload: { id: projectileId } });
-      const explosionId = `expl-${enemy.id}-${Date.now()}`;
-      const typeData = ENEMY_TYPES[enemy.type];
-      dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
-      
-      const removeExplosionTimeout = setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
+    dispatch({ type: 'ACTIVATE_POWERUP', payload: { powerUp, timeoutId } });
 
-      const delay = isPowerUp ? 0 : 300;
-      const destroyEnemyTimeout = setTimeout(() => {
-        dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } });
-      }, delay);
-      
-      return () => {
-        clearTimeout(removeExplosionTimeout);
-        clearTimeout(destroyEnemyTimeout);
-      }
+  }, [state.enemies, state.lives, toast, destroyEnemy]);
 
-    }, 200); // projectile travel time
-  }, []);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (state.status !== 'playing') return;
+    dispatch({ type: 'INPUT_CHANGE', value: e.target.value.toLowerCase() });
+  };
   
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && state.status === 'playing') {
+      const value = state.inputValue.trim();
+      if (!value) return;
+
+      const powerUp = POWER_UPS.find(p => p.keywords.includes(value));
+      if (powerUp) {
+        activatePowerUp(powerUp);
+      } else {
+          const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
+          if (matchedEnemy) {
+            destroyEnemy(matchedEnemy);
+          }
+      }
+      
+      dispatch({ type: 'INPUT_CHANGE', value: '' });
+    }
+  };
+
   const spawnEnemy = useCallback(() => {
     if (state.status !== 'playing' || state.enemies.length > 15 + state.level) return;
 
@@ -478,6 +472,7 @@ export function CyberTypeDefense() {
       inputRef.current?.focus();
       lastTimeRef.current = undefined;
       enemyIdCounter = 0;
+      effectIdCounter = 0;
       enemySpawnTimerRef.current = 0;
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     } else if (state.status !== 'playing' && gameLoopRef.current) {
@@ -603,3 +598,5 @@ export function CyberTypeDefense() {
     </div>
   );
 }
+
+    
