@@ -9,52 +9,60 @@ import type { PowerUpType } from '@/lib/game-data';
 interface PowerUpProps {
   id: number;
   type: PowerUpType;
+  word: string;
   x: number;
   y: number;
-  createdAt: number;
-  onClick: () => void;
+  status: 'alive' | 'dying';
 }
 
-const PowerUpComponent: React.FC<PowerUpProps> = ({ type, x, y, createdAt, onClick }) => {
+const PowerUpComponent: React.FC<PowerUpProps> = ({ type, x, y, word, status }) => {
   const [visible, setVisible] = useState(false);
   const typeData = POWER_UP_TYPES[type];
   const Icon = typeData.icon;
 
   useEffect(() => {
-    // Fade in
     const fadeInTimer = setTimeout(() => setVisible(true), 100);
-    
-    // Fade out
-    const fadeOutTimer = setTimeout(() => setVisible(false), 6000);
-
-    return () => {
-      clearTimeout(fadeInTimer);
-      clearTimeout(fadeOutTimer);
-    };
+    return () => clearTimeout(fadeInTimer);
   }, []);
+
+  const isDying = status === 'dying';
   
   return (
-    <button
-      onClick={onClick}
+    <div
       className={cn(
-        "absolute w-16 h-16 rounded-full flex items-center justify-center transition-all duration-500 ease-out cursor-pointer",
-        "bg-background/50 backdrop-blur-sm border-2",
-        typeData.className.replace('text-', 'border-'),
-        visible ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+        "absolute flex flex-col items-center group transition-all duration-500 ease-out",
+        visible && !isDying ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
       )}
       style={{
         left: `${x}px`,
         top: `${y}px`,
         transform: 'translate(-50%, -50%)',
-        boxShadow: `0 0 20px currentColor`,
       }}
-      aria-label={`Activate ${type} power-up`}
     >
-      <Icon className={cn("w-8 h-8", typeData.className)} />
-    </button>
+      <div 
+        className={cn(
+            "relative w-auto flex items-center justify-center px-4 h-16 rounded-md",
+            typeData.className
+        )}
+        style={{
+            filter: `drop-shadow(0 0 12px currentColor)`,
+        }}
+      >
+        <Icon className="w-8 h-8 mr-3 text-white" />
+        <div 
+            className="font-mono font-bold tracking-widest text-lg text-white"
+            style={{
+                textShadow: `
+                0 0 2px #000, 
+                0 0 5px #000, 
+                0 0 10px #000`
+            }}
+        >
+          {word}
+        </div>
+      </div>
+    </div>
   );
 };
 
 export default React.memo(PowerUpComponent);
-
-    

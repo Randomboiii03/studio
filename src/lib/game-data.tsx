@@ -1,3 +1,4 @@
+
 import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull, Snowflake, Bomb } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -58,6 +59,7 @@ export type PowerUpType = 'Freeze' | 'Nuke' | 'Shield';
 export type PowerUpInfo = {
     icon: LucideIcon;
     className: string;
+    word: string;
     duration: number;
     effect: {
         value: number;
@@ -68,21 +70,22 @@ export const POWER_UP_TYPES: Record<PowerUpType, PowerUpInfo> = {
     Freeze: {
         icon: Snowflake,
         className: 'text-cyan-400',
+        word: 'freeze',
         duration: 5000, // 5 seconds
         effect: { value: 0 },
     },
     Nuke: {
         icon: Bomb,
         className: 'text-destructive',
+        word: 'nuke',
         duration: 0,
         effect: { value: 0 },
     },
     Shield: {
         icon: Shield,
         className: 'text-blue-500',
+        word: 'shield',
         duration: 0, 
         effect: { value: 5 }, // Grants 5 shield points
     },
 };
-
-    

@@ -11,7 +11,7 @@ import GameOverModal from './GameOverModal';
 import PauseMenu from './PauseMenu';
 import PowerUpComponent from './PowerUp';
 import { cn } from '@/lib/utils';
-import { Award, Heart, Pause, Zap, Shield as ShieldIcon, Snowflake, Bomb } from 'lucide-react';
+import { Award, Heart, Pause, Zap, Shield as ShieldIcon } from 'lucide-react';
 import type { PowerUpType } from '@/lib/game-data';
 
 type Enemy = {
@@ -42,9 +42,11 @@ type Explosion = { id: string; x: number; y: number; color: string; };
 type PowerUp = {
   id: number;
   type: PowerUpType;
+  word: string;
   x: number;
   y: number;
   createdAt: number;
+  status: 'alive' | 'dying';
 };
 
 type ActivePowerUp = {
@@ -85,7 +87,7 @@ type Action =
   | { type: 'STOP_SHAKE' }
   | { type: 'ADD_ENEMY', payload: Enemy }
   | { type: 'ADD_POWERUP' }
-  | { type: 'COLLECT_POWERUP', payload: { powerUpId: number } }
+  | { type: 'POWERUP_HIT'; payload: { powerUpId: number } }
   | { type: 'ACTIVATE_POWERUP', payload: { type: PowerUpType } };
 
 
@@ -245,7 +247,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           ...state, 
           enemies: updatedEnemies, 
           projectiles: updatedProjectiles,
-          powerUps: state.powerUps.filter(p => now - p.createdAt < 7000),
+          powerUps: state.powerUps.filter(p => now - p.createdAt < 7000 && p.status === 'alive'),
           activePowerUps: state.activePowerUps.filter(p => now < p.expiresAt),
       };
       
@@ -340,18 +342,28 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         const newShield = state.shield - shieldDamage;
         const newLives = state.lives - lifeDamage;
 
+        const updatedEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
+
         if (newLives <= 0) {
             return { ...state, status: 'gameOver', lives: 0, shield: 0, enemies: [], projectiles: [] };
         }
 
-        return {
+        let newState = {
             ...state,
             lives: newLives,
             shield: newShield,
             combo: 0,
-            enemies: state.enemies.filter(e => e.id !== action.payload.enemyId),
+            enemies: updatedEnemies,
             isShaking: true,
         };
+        
+        // This is the fix for the level progression bug
+        const remainingEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
+        if (state.enemies.length > 0 && remainingEnemies.length === 0) {
+          newState.level = state.level + 1;
+        }
+
+        return newState;
     }
 
     case 'SUBMIT_WORD': {
@@ -364,18 +376,29 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
       if (matchedEnemy) {
         return gameReducer(state, { type: 'ENEMY_HIT', payload: { enemyId: matchedEnemy.id } });
-      } else {
-        return { ...state, inputValue: '', combo: 0 };
       }
+
+      const matchedPowerUp = state.powerUps.find(
+        (p) => p.status === 'alive' && p.word === value
+      );
+
+      if (matchedPowerUp) {
+        return gameReducer(state, { type: 'POWERUP_HIT', payload: { powerUpId: matchedPowerUp.id } });
+      }
+
+      return { ...state, inputValue: '', combo: 0 };
     }
     
     case 'CLEANUP_EFFECTS': {
         const remainingEnemies = state.enemies.filter(e => e.status !== 'dying');
+        const remainingPowerUps = state.powerUps.filter(p => p.status !== 'dying');
+        
         const levelUp = state.enemies.length > 0 && remainingEnemies.length === 0;
         
         return {
             ...state,
             enemies: remainingEnemies,
+            powerUps: remainingPowerUps,
             explosions: [],
             level: levelUp ? state.level + 1 : state.level,
         };
@@ -391,25 +414,33 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return {...state, isShaking: false};
       
     case 'ADD_POWERUP': {
-        const powerUpTypes = Object.keys(POWER_UP_TYPES) as PowerUpType[];
-        const type = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
+        const availablePowerUps = Object.keys(POWER_UP_TYPES) as PowerUpType[];
+        const type = availablePowerUps[Math.floor(Math.random() * availablePowerUps.length)];
+        const powerUpInfo = POWER_UP_TYPES[type];
+
         const newPowerUp: PowerUp = {
             id: powerUpIdCounter++,
             type,
+            word: powerUpInfo.word,
             x: Math.random() * (GAME_WIDTH - 100) + 50,
             y: Math.random() * (GAME_HEIGHT / 2),
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            status: 'alive'
         };
         return { ...state, powerUps: [...state.powerUps, newPowerUp] };
     }
 
-    case 'COLLECT_POWERUP': {
+    case 'POWERUP_HIT': {
         const powerUp = state.powerUps.find(p => p.id === action.payload.powerUpId);
         if (!powerUp) return state;
+
+        const nextState = gameReducer(state, { type: 'ACTIVATE_POWERUP', payload: { type: powerUp.type } });
+        
         return {
-            ...state,
-            powerUps: state.powerUps.filter(p => p.id !== action.payload.powerUpId),
-            ...gameReducer(state, { type: 'ACTIVATE_POWERUP', payload: { type: powerUp.type } })
+            ...nextState,
+            inputValue: '',
+            score: nextState.score + 50, // Bonus points for getting a power-up
+            powerUps: nextState.powerUps.map(p => p.id === action.payload.powerUpId ? { ...p, status: 'dying' } : p),
         };
     }
 
@@ -422,7 +453,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         
         switch (type) {
             case 'Nuke': {
-                const nonBossEnemies = newState.enemies.filter(e => !e.isBoss);
+                const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 const explosions = nonBossEnemies.map(enemy => ({
                     id: `expl-${enemy.id}-${effectIdCounter++}`,
                     x: enemy.x,
@@ -630,7 +661,6 @@ export function CyberTypeDefense() {
                 <PowerUpComponent
                     key={p.id}
                     {...p}
-                    onClick={() => dispatch({ type: 'COLLECT_POWERUP', payload: { powerUpId: p.id } })}
                 />
             ))}
             
@@ -706,5 +736,3 @@ export function CyberTypeDefense() {
     </div>
   );
 }
-
-    
