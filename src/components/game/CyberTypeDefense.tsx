@@ -4,8 +4,7 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, WORDS_LIST } from '@/lib/game-data.tsx';
-import { useToast } from "@/hooks/use-toast";
+import { ENEMY_TYPES, WORDS_LIST } from '@/lib/game-data';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
@@ -144,7 +143,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         ...state,
         score: state.score + scoreGained,
         combo: state.combo + 1,
-        enemies: state.enemies.map(e => e.id === action.payload.enemyId ? { ...e, status: 'dying' } : e),
+        enemies: state.enemies.map(e =>
+          e.id === action.payload.enemyId ? { ...e, status: 'dying' } : e
+        ),
       };
     }
     
@@ -422,7 +423,7 @@ export function CyberTypeDefense() {
                 <div className="text-center text-xs text-muted-foreground font-mono">LEVEL: {state.level}</div>
             </div>
 
-            <Button variant="ghost" size="icon" className="absolute top-4 right-16 z-20 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
+            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-20 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
                 <Pause />
             </Button>
             
@@ -498,3 +499,5 @@ export function CyberTypeDefense() {
     </div>
   );
 }
+
+    
