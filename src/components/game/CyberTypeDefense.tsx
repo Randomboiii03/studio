@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, WORDS_LIST } from '@/lib/game-data';
+import { ENEMY_TYPES, WORDS_LIST, BOSS_WORDS_LIST } from '@/lib/game-data';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
@@ -14,7 +14,8 @@ import { Award, Heart, Pause, Zap } from 'lucide-react';
 
 type Enemy = {
   id: number;
-  word: string;
+  words: string[];
+  currentWordIndex: number;
   x: number;
   y: number;
   speed: number;
@@ -22,6 +23,7 @@ type Enemy = {
   vx: number;
   vy: number;
   status: 'alive' | 'dying' | 'targeted';
+  isBoss: boolean;
 };
 
 type Projectile = {
@@ -57,7 +59,7 @@ type Action =
   | { type: 'GAME_TICK' }
   | { type: 'INPUT_CHANGE'; payload: string }
   | { type: 'SUBMIT_WORD' }
-  | { type: 'ENEMY_HIT'; payload: { enemy: Enemy } }
+  | { type: 'ENEMY_HIT'; payload: { enemyId: number } }
   | { type: 'PROJECTILE_HIT'; payload: { targetId: number } }
   | { type: 'ENEMY_REACHED_END'; payload: { enemyId: number } }
   | { type: 'CLEANUP_EFFECTS' }
@@ -70,7 +72,7 @@ const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 600;
 const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
-const TURRET_HITBOX_Y = GAME_HEIGHT - 80; // Adjusted for better collision feel
+const TURRET_HITBOX_Y = GAME_HEIGHT - 80;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
 
@@ -89,11 +91,10 @@ const initialState: GameState = {
 
 const spawnEnemy = (level: number): Enemy => {
   const word = WORDS_LIST[Math.floor(Math.random() * WORDS_LIST.length)];
-  const enemyTypes = Object.keys(ENEMY_TYPES) as (keyof typeof ENEMY_TYPES)[];
+  const enemyTypes = Object.keys(ENEMY_TYPES).filter(t => t !== 'Boss') as (keyof typeof ENEMY_TYPES)[];
   const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
   
-  // Base speed decreases for longer words
-  const lengthModifier = 1 - (Math.min(word.length, 15) - 4) * 0.05; // -5% speed per char over 4
+  const lengthModifier = 1 - (Math.min(word.length, 15) - 4) * 0.05;
   const baseSpeed = (0.5 + level * 0.1) * Math.max(0.5, lengthModifier);
   
   const startX = Math.random() * (GAME_WIDTH - 100) + 50;
@@ -104,15 +105,43 @@ const spawnEnemy = (level: number): Enemy => {
 
   return {
     id: enemyIdCounter++,
-    word,
+    words: [word],
+    currentWordIndex: 0,
     x: startX,
     y: startY,
     speed: speed,
     type,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
-    status: 'alive'
+    status: 'alive',
+    isBoss: false
   };
+};
+
+const spawnBoss = (level: number): Enemy => {
+    const bossWords = BOSS_WORDS_LIST[Math.floor(Math.random() * BOSS_WORDS_LIST.length)];
+    const type = 'Boss';
+    const baseSpeed = (0.3 + level * 0.05);
+
+    const startX = GAME_WIDTH / 2;
+    const startY = -100;
+
+    const angle = Math.atan2(TURRET_POSITION.y - startY, TURRET_POSITION.x - startX);
+    const speed = baseSpeed * ENEMY_TYPES[type].speed;
+
+    return {
+        id: enemyIdCounter++,
+        words: bossWords,
+        currentWordIndex: 0,
+        x: startX,
+        y: startY,
+        speed: speed,
+        type: type,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        status: 'alive',
+        isBoss: true
+    };
 };
 
 const gameReducer = (state: GameState, action: Action): GameState => {
@@ -199,7 +228,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     }
     
     case 'ENEMY_HIT': {
-        const { enemy } = action.payload;
+        const { enemyId } = action.payload;
+        const enemy = state.enemies.find(e => e.id === enemyId);
+        if (!enemy) return state;
+
         const projectileId = `proj-${enemy.id}-${effectIdCounter++}`;
         const newProjectile: Projectile = {
             id: projectileId,
@@ -227,8 +259,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       if (!enemy || enemy.status === 'dying') {
           return state;
       }
-      
-      const scoreGained = enemy.word.length * 10 * (state.combo > 0 ? state.combo : 1);
+
+      const scoreGained = enemy.words[enemy.currentWordIndex].length * 10 * (state.combo > 0 ? state.combo : 1);
       const explosionId = `expl-${targetId}-${effectIdCounter++}`;
       const typeData = ENEMY_TYPES[enemy.type];
       const newExplosion: Explosion = {
@@ -238,7 +270,20 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           color: typeData.className
       };
       
-      const updatedEnemies = state.enemies.map(e => e.id === targetId ? { ...e, status: 'dying' } : e);
+      let updatedEnemies = [...state.enemies];
+      const enemyIndex = updatedEnemies.findIndex(e => e.id === targetId);
+
+      if (enemy.isBoss && enemy.currentWordIndex < enemy.words.length - 1) {
+          // Boss has more words, advance to the next word
+          updatedEnemies[enemyIndex] = {
+              ...enemy,
+              currentWordIndex: enemy.currentWordIndex + 1,
+              status: 'alive' // Keep it alive
+          };
+      } else {
+          // It's a regular enemy or the last word of a boss
+          updatedEnemies[enemyIndex] = { ...enemy, status: 'dying' };
+      }
 
       return {
         ...state,
@@ -251,7 +296,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     }
     
     case 'ENEMY_REACHED_END': {
-        const newLives = state.lives - 1;
+        const enemy = state.enemies.find(e => e.id === action.payload.enemyId);
+        const livesLost = enemy?.isBoss ? 5 : 1;
+        const newLives = state.lives - livesLost;
+
         if (newLives <= 0) {
             return { ...state, status: 'gameOver', lives: 0, enemies: [], projectiles: [] };
         }
@@ -269,11 +317,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       if (!value) return state;
 
       const matchedEnemy = state.enemies.find(
-        (enemy) => enemy.word === value && enemy.status === 'alive'
+        (enemy) => enemy.status === 'alive' && enemy.words[enemy.currentWordIndex] === value
       );
 
       if (matchedEnemy) {
-        return gameReducer(state, { type: 'ENEMY_HIT', payload: { enemy: matchedEnemy } });
+        return gameReducer(state, { type: 'ENEMY_HIT', payload: { enemyId: matchedEnemy.id } });
       } else {
         return { ...state, inputValue: '', combo: 0 };
       }
@@ -286,7 +334,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return {
             ...state,
             enemies: remainingEnemies,
-            explosions: [], // Explosions are short-lived
+            explosions: [],
             level: levelUp ? state.level + 1 : state.level,
         };
     }
@@ -382,16 +430,24 @@ export function CyberTypeDefense() {
   useEffect(() => {
     if (status !== 'playing') return;
     
-    // Check if all enemies are gone to trigger next level
     if (enemies.length === 0) {
-        // Spawn initial wave for the level
-        const waveSize = Math.min(5 + level, 20); // e.g. level 1 has 6, grows to max of 20
-        for(let i = 0; i < waveSize; i++) {
+        if (level % 5 === 0) {
+            // Boss level
             setTimeout(() => {
-                if(status === 'playing') {
-                    dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level) });
+                if (status === 'playing') {
+                    dispatch({ type: 'ADD_ENEMY', payload: spawnBoss(level) });
                 }
-            }, i * (2000 / (level * 0.5 + 1))); // Stagger spawns, faster with levels
+            }, 1000);
+        } else {
+            // Regular level
+            const waveSize = Math.min(5 + level, 20);
+            for(let i = 0; i < waveSize; i++) {
+                setTimeout(() => {
+                    if(status === 'playing') {
+                        dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level) });
+                    }
+                }, i * (2000 / (level * 0.5 + 1)));
+            }
         }
     }
 }, [status, level, enemies.length]);
@@ -442,7 +498,7 @@ export function CyberTypeDefense() {
             </Button>
             
             {enemies.map(enemy => (
-              <EnemyComponent key={enemy.id} {...enemy} />
+              <EnemyComponent key={enemy.id} word={enemy.words[enemy.currentWordIndex]} {...enemy} />
             ))}
             
             {projectiles.map(p => (
@@ -450,9 +506,9 @@ export function CyberTypeDefense() {
             ))}
 
             {explosions.map(explosion => (
-              <div key={`${explosion.id}-${Math.random()}`} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
+              <div key={explosion.id} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
                 {[...Array(5)].map((_, i) => (
-                  <div key={`${explosion.id}-${i}-${Math.random()}`} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
+                  <div key={i} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
                       width: `${Math.random() * 6 + 2}px`,
                       height: `${Math.random() * 6 + 2}px`,
                       transform: `translate(${Math.random() * 40 - 20}px, ${Math.random() * 40 - 20}px)`,

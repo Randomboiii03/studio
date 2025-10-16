@@ -1,40 +1,39 @@
-import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot } from 'lucide-react';
+import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export const WORDS_LIST = [
     // Easy 4-5 letter words
-    'code', 'data', 'link', 'user', 'file', 'read', 'write', 'scan', 'ping',
-    'lock', 'keys', 'safe', 'secure', 'alert', 'block', 'track', 'trace',
-    'admin', 'login', 'shell', 'proxy', 'cloud', 'virus', 'patch', 'bot',
-    'root', 'node', 'port', 'host', 'query', 'token', 'guard', 'hash',
+    "code", "data", "link", "user", "file", "read", "write", "scan", "ping",
+    "lock", "keys", "safe", "alert", "block", "track", "trace", "admin",
+    "login", "shell", "proxy", "cloud", "virus", "patch", "bot", "root",
+    "node", "port", "host", "query", "token", "guard", "hash", "mode",
 
     // Medium 6-7 letter words
-    'access', 'analyze', 'backup', 'binary', 'bypass', 'cache', 'compile',
-    'connect', 'cookie', 'cyber', 'debug', 'decrypt', 'delete', 'denied',
-    'deploy', 'device', 'domain', 'encrypt', 'exploit', 'filter', 'firewall',
-    'hacker', 'kernel', 'malware', 'monitor', 'network', 'packet',
-    'password', 'policy', 'protect', 'protocol', 'recover', 'reboot',
-    'restore', 'router', 'sandbox', 'script', 'server', 'shield', 'source',
-    'spyware', 'system', 'trojan', 'update', 'virtual', 'worm',
+    "access", "backup", "binary", "bypass", "cache", "cookie", "cyber",
+    "debug", "delete", "deploy", "device", "domain", "filter", "hacker",
+    "kernel", "monitor", "network", "packet", "policy", "reboot", "router",
+    "script", "server", "shield", "source", "system", "update", "upload",
 
     // Hard 8+ letter words
-    'algorithm', 'antivirus', 'archive', 'authenticate', 'authorize',
-    'backdoor', 'bandwidth', 'biometric', 'blacklist', 'bruteforce',
-    'certificate', 'checksum', 'ciphertext', 'configure', 'connection',
-    'credential', 'database', 'decompile', 'decryption', 'defend',
-    'directory', 'disaster', 'document', 'download', 'encryption',
-    'endpoint', 'escalate', 'ethernet', 'firewall', 'firmware',
-    'framework', 'gateway', 'hardware', 'honeypot', 'infiltrate',
-    'initialize', 'injection', 'install', 'internet', 'intrusion',
-    'keylogger', 'localhost', 'malicious', 'metadata', 'mitigate',
-    'obfuscate', 'override', 'penetrate', 'permission', 'phishing',
-    'platform', 'polymorphic', 'privilege', 'procedure', 'processor',
-    'protocol', 'quarantine', 'ransomware', 'redirect', 'replicate',
-    'repository', 'response', 'rootkit', 'security', 'software',
-    'spoofing', 'spyware', 'steganography', 'streaming', 'superuser',
-    'terminal', 'threat', 'topology', 'transaction', 'transfer',
-    'tunneling', 'username', 'validation', 'virtualize', 'vulnerability',
-    'whitelist', 'workstation'
+    "analyze", "exploit", "firewall", "malware", "password", "protect",
+    "protocol", "recover", "restore", "sandbox", "spyware", "trojan",
+    "virtual", "encrypt", "decrypt", "denied", "connect", "algorithm",
+    "antivirus", "archive", "backdoor", "bandwidth", "biometric", "blacklist",
+    "bruteforce", "configure", "database", "download", "endpoint", "ethernet",
+    "firmware", "framework", "gateway", "hardware", "honeypot", "initialize",
+    "install", "internet", "keylogger", "localhost", "metadata", "mitigate",
+    "override", "permission", "phishing", "platform", "privilege", "processor",
+    "quarantine", "redirect", "response", "security", "software", "spoofing",
+    "terminal", "threat", "topology", "transfer", "tunnel", "username",
+    "validate", "vulnerability", "whitelist"
+];
+
+export const BOSS_WORDS_LIST = [
+    ['secure', 'encrypt', 'authenticate', 'authorize', 'firewall'],
+    ['protect', 'defend', 'mitigate', 'quarantine', 'eradicate'],
+    ['analyze', 'detect', 'isolate', 'contain', 'resolve'],
+    ['harden', 'patch', 'update', 'configure', 'monitor'],
+    ['scan', 'identify', 'cleanse', 'restore', 'fortify']
 ];
 
 
@@ -51,4 +50,5 @@ export const ENEMY_TYPES: { [key: string]: EnemyType } = {
     Ransomware: { icon: Biohazard, className: 'text-threat-ransomware', speed: 1.1 },
     Spyware: { icon: ServerCrash, className: 'text-threat-spyware', speed: 1.3 },
     Adware: { icon: Bot, className: 'text-threat-adware', speed: 0.9 },
+    Boss: { icon: Skull, className: 'text-destructive', speed: 0.5 },
 };

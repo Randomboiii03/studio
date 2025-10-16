@@ -7,15 +7,20 @@ import { ENEMY_TYPES } from '@/lib/game-data';
 
 interface EnemyProps {
   word: string;
+  words: string[];
+  currentWordIndex: number;
   x: number;
   y: number;
   type: keyof typeof ENEMY_TYPES;
   status: 'alive' | 'dying' | 'targeted';
+  isBoss: boolean;
 }
 
-const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type, status }) => {
+const EnemyComponent: React.FC<EnemyProps> = ({ word, words, currentWordIndex, x, y, type, status, isBoss }) => {
   const typeData = ENEMY_TYPES[type] || ENEMY_TYPES['Malware'];
   const Icon = typeData.icon;
+
+  const healthPercentage = isBoss ? ((words.length - currentWordIndex) / words.length) * 100 : 100;
 
   return (
     <div
@@ -30,11 +35,12 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type, status }) => {
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <div className={cn("relative w-auto h-16 flex items-center justify-center px-4 rounded-md", typeData.className)} style={{ filter: `drop-shadow(0 0 8px currentColor)`}}>
-        <Icon className="w-8 h-8 mr-3 text-white" />
+      <div className={cn("relative w-auto flex items-center justify-center px-4 rounded-md", isBoss ? 'h-24' : 'h-16', typeData.className)} style={{ filter: `drop-shadow(0 0 8px currentColor)`}}>
+        <Icon className={cn("mr-3 text-white", isBoss ? 'w-12 h-12' : 'w-8 h-8')} />
         <div
           className={cn(
-            "font-mono font-bold tracking-widest text-lg text-white"
+            "font-mono font-bold tracking-widest text-white",
+            isBoss ? 'text-2xl' : 'text-lg'
           )}
           style={{
             textShadow: `
@@ -46,6 +52,11 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type, status }) => {
           {word}
         </div>
       </div>
+        {isBoss && (
+            <div className="absolute -bottom-4 w-48 h-2.5 bg-gray-700/50 border border-gray-500 rounded-full overflow-hidden mt-2">
+                <div className="h-full bg-red-500 transition-all duration-300" style={{ width: `${healthPercentage}%` }} />
+            </div>
+        )}
     </div>
   );
 };
