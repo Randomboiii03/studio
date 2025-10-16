@@ -344,13 +344,12 @@ export function CyberTypeDefense() {
 
     switch(powerUp.name) {
       case 'Frenzy':
-        state.enemies.forEach(enemy => {
-            if(enemy.status === 'alive') destroyEnemy(enemy);
-        });
-        break;
       case 'Nuke':
-        state.enemies.forEach(enemy => {
-            if(enemy.status === 'alive') destroyEnemy(enemy);
+        // Important: Create a copy of the enemies array to iterate over
+        [...state.enemies].forEach(enemy => {
+            if(enemy.status === 'alive') {
+                destroyEnemy(enemy);
+            }
         });
         break;
       case 'Freeze':
@@ -373,20 +372,25 @@ export function CyberTypeDefense() {
         break;
     }
     
-    const timeoutId = setTimeout(() => {
+    if (!isInstant) {
+      const timeoutId = setTimeout(() => {
+          dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
+          switch(powerUp.name) {
+              case 'Freeze': dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: false } }); break;
+              case 'Shield': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
+              case 'Slowdown': dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: false } }); break;
+              case 'Overclock': dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 1 } }); break;
+              case 'King': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
+          }
+      }, powerUp.duration);
+      dispatch({ type: 'ACTIVATE_POWERUP', payload: { powerUp, timeoutId } });
+    } else {
+       // For instant powerups, we add and remove it quickly to show it in the UI
+      const timeoutId = setTimeout(() => {
         dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
-        if(!isInstant) {
-             switch(powerUp.name) {
-                case 'Freeze': dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: false } }); break;
-                case 'Shield': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
-                case 'Slowdown': dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: false } }); break;
-                case 'Overclock': dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 1 } }); break;
-                case 'King': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
-            }
-        }
-    }, isInstant ? 500 : powerUp.duration);
-    
-    dispatch({ type: 'ACTIVATE_POWERUP', payload: { powerUp, timeoutId } });
+      }, 500);
+      dispatch({ type: 'ACTIVATE_POWERUP', payload: { powerUp, timeoutId } });
+    }
 
   }, [state.enemies, state.lives, toast, destroyEnemy]);
 
