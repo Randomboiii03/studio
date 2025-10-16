@@ -68,6 +68,7 @@ type GameState = {
   activePowerUps: ActivePowerUp[];
   inputValue: string;
   isShaking: boolean;
+  inputErrorShake: boolean;
   nukeEffect: boolean;
 };
 
@@ -86,6 +87,8 @@ type Action =
   | { type: 'CLEANUP_EFFECTS' }
   | { type: 'TRIGGER_SHAKE' }
   | { type: 'STOP_SHAKE' }
+  | { type: 'TRIGGER_INPUT_ERROR_SHAKE' }
+  | { type: 'STOP_INPUT_ERROR_SHAKE' }
   | { type: 'ADD_ENEMY', payload: Enemy }
   | { type: 'ADD_POWERUP' }
   | { type: 'POWERUP_HIT'; payload: { powerUpId: number } }
@@ -117,6 +120,7 @@ const initialState: GameState = {
   activePowerUps: [],
   inputValue: '',
   isShaking: false,
+  inputErrorShake: false,
   nukeEffect: false,
 };
 
@@ -388,7 +392,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return gameReducer(state, { type: 'POWERUP_HIT', payload: { powerUpId: matchedPowerUp.id } });
       }
 
-      return { ...state, inputValue: '', combo: 0 };
+      return { ...state, inputValue: '', combo: 0, inputErrorShake: true };
     }
     
     case 'CLEANUP_EFFECTS': {
@@ -414,6 +418,12 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       
     case 'STOP_SHAKE':
       return {...state, isShaking: false};
+
+    case 'TRIGGER_INPUT_ERROR_SHAKE':
+        return { ...state, inputErrorShake: true };
+    
+    case 'STOP_INPUT_ERROR_SHAKE':
+        return { ...state, inputErrorShake: false };
       
     case 'ADD_POWERUP': {
         const availablePowerUps = Object.keys(POWER_UP_TYPES) as PowerUpType[];
@@ -531,9 +541,10 @@ export function CyberTypeDefense() {
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
+  const inputShakeTimeoutRef = useRef<NodeJS.Timeout>();
   const nukeTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, inputValue, isShaking, nukeEffect } = state;
+  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, inputValue, isShaking, inputErrorShake, nukeEffect } = state;
 
   useEffect(() => {
     if (isShaking) {
@@ -555,6 +566,18 @@ export function CyberTypeDefense() {
     };
   }, [isShaking]);
   
+  useEffect(() => {
+    if (inputErrorShake) {
+        if (inputShakeTimeoutRef.current) clearTimeout(inputShakeTimeoutRef.current);
+        inputShakeTimeoutRef.current = setTimeout(() => {
+            dispatch({ type: 'STOP_INPUT_ERROR_SHAKE' });
+        }, 400);
+    }
+    return () => {
+        if (inputShakeTimeoutRef.current) clearTimeout(inputShakeTimeoutRef.current);
+    };
+  }, [inputErrorShake]);
+
   useEffect(() => {
       if (nukeEffect) {
           if (nukeTimeoutRef.current) clearTimeout(nukeTimeoutRef.current);
@@ -754,7 +777,10 @@ useEffect(() => {
                 <Input
                     ref={inputRef}
                     type="text"
-                    className="w-full text-center bg-background/80 border-primary h-12 text-xl font-mono tracking-widest focus:bg-background focus:shadow-[0_0_20px] focus:shadow-primary/50 transition-all duration-300"
+                    className={cn(
+                        "w-full text-center bg-background/80 border-primary h-12 text-xl font-mono tracking-widest focus:bg-background focus:shadow-[0_0_20px] focus:shadow-primary/50 transition-all duration-300",
+                        inputErrorShake && "animate-screen-shake border-destructive"
+                    )}
                     placeholder={status === 'playing' ? "TYPE HERE" : ''}
                     value={inputValue}
                     onChange={handleInputChange}
