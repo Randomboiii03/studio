@@ -62,7 +62,9 @@ type Action =
   | { type: 'ENEMY_REACHED_END'; payload: { enemyId: number } }
   | { type: 'CLEANUP_EFFECTS' }
   | { type: 'TRIGGER_SHAKE' }
-  | { type: 'STOP_SHAKE' };
+  | { type: 'STOP_SHAKE' }
+  | { type: 'ADD_ENEMY', payload: Enemy };
+
 
 const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
@@ -76,7 +78,7 @@ const initialState: GameState = {
   status: 'idle',
   score: 0,
   lives: INITIAL_LIVES,
-  combo: 1,
+  combo: 0,
   level: 1,
   enemies: [],
   projectiles: [],
@@ -118,12 +120,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return {
         ...initialState,
         status: 'playing',
-        enemies: [spawnEnemy(1)],
       };
     case 'RESET_GAME':
       enemyIdCounter = 0;
       effectIdCounter = 0;
-      return { ...initialState, status: 'playing', enemies: [spawnEnemy(1)] };
+      return { ...initialState, status: 'playing' };
 
     case 'EXIT_GAME':
         return { ...initialState };
@@ -168,7 +169,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       // Check for projectile hits
       let hitProjectiles: number[] = [];
       state.projectiles.forEach(p => {
-          const enemy = updatedEnemies.find(e => e.id === p.targetId);
+          const enemy = updatedEnemies.find(e => e.id === p.targetId && e.status !== 'dying');
           if (enemy) {
               const dx = p.x - enemy.x;
               const dy = p.y - enemy.y;
@@ -178,13 +179,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           }
       });
       
-      let nextState = { ...state, enemies: updatedEnemies, projectiles: updatedProjectiles };
+      let nextState: GameState = { ...state, enemies: updatedEnemies, projectiles: updatedProjectiles };
       
       hitProjectiles.forEach(targetId => {
         nextState = gameReducer(nextState, { type: 'PROJECTILE_HIT', payload: { targetId } });
       });
-
-      const newLevel = Math.floor(state.score / 1000) + 1;
 
       // Check for enemies reaching the end
       const enemiesReachedEnd = nextState.enemies.filter(e => e.y >= TURRET_HITBOX_Y && e.status === 'alive');
@@ -193,7 +192,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         nextState = gameReducer(nextState, { type: 'ENEMY_REACHED_END', payload: { enemyId: enemy.id } });
       });
 
-      return { ...nextState, level: newLevel };
+      return nextState;
     }
     
     case 'ENEMY_HIT': {
@@ -226,7 +225,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           return state;
       }
       
-      const scoreGained = enemy.word.length * 10 * state.combo;
+      const scoreGained = enemy.word.length * 10 * (state.combo || 1);
       const explosionId = `expl-${targetId}-${effectIdCounter++}`;
       const typeData = ENEMY_TYPES[enemy.type];
       const newExplosion: Explosion = {
@@ -243,6 +242,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         enemies: state.enemies.map(e =>
           e.id === targetId ? { ...e, status: 'dying' } : e
         ),
+        projectiles: state.projectiles.filter(p => p.targetId !== targetId),
         explosions: [...state.explosions, newExplosion],
       };
     }
@@ -255,7 +255,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return {
             ...state,
             lives: newLives,
-            combo: 1,
+            combo: 0,
             enemies: state.enemies.filter(e => e.id !== action.payload.enemyId),
             isShaking: true,
         };
@@ -272,17 +272,24 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       if (matchedEnemy) {
         return gameReducer(state, { type: 'ENEMY_HIT', payload: { enemy: matchedEnemy } });
       } else {
-        return { ...state, inputValue: '' };
+        return { ...state, inputValue: '', combo: 0 };
       }
     }
     
     case 'CLEANUP_EFFECTS': {
+        const remainingEnemies = state.enemies.filter(e => e.status !== 'dying');
+        const levelUp = state.enemies.length > 0 && remainingEnemies.length === 0;
+        
         return {
             ...state,
-            enemies: state.enemies.filter(e => e.status !== 'dying'),
+            enemies: remainingEnemies,
             explosions: [], // Explosions are short-lived
+            level: levelUp ? state.level + 1 : state.level,
         };
     }
+
+    case 'ADD_ENEMY':
+        return { ...state, enemies: [...state.enemies, action.payload] };
 
     case 'TRIGGER_SHAKE':
       return {...state, isShaking: true};
@@ -371,42 +378,19 @@ export function CyberTypeDefense() {
 
   // Enemy Spawner
   useEffect(() => {
-    if (status !== 'playing') return;
+    if (status !== 'playing' || enemies.length > 0) return;
 
-    const spawnLoop = () => {
-      const now = Date.now();
-      const timeSinceLastSpawn = now - lastSpawnTimeRef.current;
-      const spawnInterval = Math.max(800, 3000 - level * 100);
+    // Spawn initial wave for the level
+    const waveSize = Math.min(5 + level * 2, 20); // e.g. level 1 has 7, grows to max of 20
+    for(let i = 0; i < waveSize; i++) {
+        setTimeout(() => {
+            if(status === 'playing') {
+                dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level) });
+            }
+        }, i * (2000 / level)); // Stagger spawns
+    }
+}, [status, level, enemies.length]);
 
-      if (timeSinceLastSpawn > spawnInterval && enemies.length < 15 + level) {
-        const newEnemies = [...enemies, spawnEnemy(level)];
-        lastSpawnTimeRef.current = now;
-        // This direct update is tricky. A dispatch would be better.
-        // For now, let's keep it simple, but this is a code smell.
-        // A better approach would be a 'SPAWN_ENEMIES' action.
-        (dispatch as any)({type: 'MANUAL_ENEMY_UPDATE', payload: newEnemies})
-      }
-    };
-    const spawner = setInterval(() => {
-        const now = Date.now();
-        const timeSinceLastSpawn = now - lastSpawnTimeRef.current;
-        const spawnInterval = Math.max(800, 3000 - state.level * 100);
-        if (timeSinceLastSpawn > spawnInterval && state.enemies.length < 15 + state.level) {
-            const newEnemy = spawnEnemy(state.level);
-            (dispatch as any)({ type: 'ADD_ENEMY', payload: newEnemy }); // This needs to be a new action
-             lastSpawnTimeRef.current = now;
-        }
-    }, 1000); // Check every second
-
-    return () => clearInterval(spawner);
-}, [status, level, enemies.length]); // Simplified dependencies
-
-// A new reducer case for adding an enemy
-// This should be added to your reducer
-/*
-case 'ADD_ENEMY':
-    return { ...state, enemies: [...state.enemies, action.payload] };
-*/
 
   // Effect and entity cleanup loop
   useEffect(() => {
@@ -448,15 +432,6 @@ case 'ADD_ENEMY':
           </div>
         ) : (
           <>
-            <div className="absolute top-4 left-4 flex flex-col gap-2 text-primary p-2 rounded-lg bg-black/30 border border-primary/20 backdrop-blur-sm z-10">
-                <div className="flex items-center gap-4">
-                    <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
-                    <StatItem icon={Zap} value={`x${combo}`} label="Combo" className="text-yellow-400" />
-                    <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
-                </div>
-                <div className="text-center text-xs text-muted-foreground font-mono">LEVEL: {level}</div>
-            </div>
-
             <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-20 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
                 <Pause />
             </Button>
@@ -483,23 +458,36 @@ case 'ADD_ENEMY':
             ))}
 
             <Turret />
+            
+            <div className="absolute bottom-4 left-0 right-0 px-4 flex justify-between items-end z-10 pointer-events-none">
+                <div className="flex-1 flex justify-start gap-4">
+                     <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
+                     <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
+                </div>
 
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-80">
-              <Input
-                ref={inputRef}
-                type="text"
-                className="w-full text-center bg-background/80 border-primary h-12 text-xl font-mono tracking-widest focus:bg-background focus:shadow-[0_0_20px] focus:shadow-primary/50 transition-all duration-300"
-                placeholder={status === 'playing' ? "TYPE HERE" : ''}
-                value={inputValue}
-                onChange={handleInputChange}
-                onKeyDown={handleKeyDown}
-                disabled={status !== 'playing'}
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck="false"
-              />
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-80 pointer-events-auto">
+                    <Input
+                        ref={inputRef}
+                        type="text"
+                        className="w-full text-center bg-background/80 border-primary h-12 text-xl font-mono tracking-widest focus:bg-background focus:shadow-[0_0_20px] focus:shadow-primary/50 transition-all duration-300"
+                        placeholder={status === 'playing' ? "TYPE HERE" : ''}
+                        value={inputValue}
+                        onChange={handleInputChange}
+                        onKeyDown={handleKeyDown}
+                        disabled={status !== 'playing'}
+                        autoComplete="off"
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck="false"
+                    />
+                </div>
+
+                <div className="flex-1 flex justify-end gap-4">
+                    <StatItem icon={Zap} value={`x${combo}`} label="Combo" className="text-yellow-400" />
+                    <div className="text-center text-xs text-muted-foreground font-mono w-24">LEVEL: {level}</div>
+                </div>
             </div>
+
           </>
         )}
 
@@ -521,3 +509,5 @@ case 'ADD_ENEMY':
     </div>
   );
 }
+
+    
