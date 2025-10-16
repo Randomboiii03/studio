@@ -328,10 +328,9 @@ export function CyberTypeDefense() {
       const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
       if (matchedEnemy) {
         destroyEnemy(matchedEnemy);
-        dispatch({ type: 'INPUT_CHANGE', value: '' });
-      } else {
-        dispatch({ type: 'INPUT_CHANGE', value: '' });
       }
+      
+      dispatch({ type: 'INPUT_CHANGE', value: '' });
     }
   };
   
@@ -384,14 +383,17 @@ export function CyberTypeDefense() {
         
         dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId } });
     } else {
-        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId: setTimeout(() => {
+        const timeoutId = setTimeout(() => {
             dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
-        }, 500) } });
+        }, 500);
+        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId } });
     }
   }, [state.enemies, state.lives, toast]);
   
 
-  const destroyEnemy = (enemy: Enemy, isPowerUp = false) => {
+  const destroyEnemy = useCallback((enemy: Enemy, isPowerUp = false) => {
+    if (enemy.status !== 'alive') return;
+
     dispatch({ type: 'ENEMY_HIT', payload: { enemyId: enemy.id } });
 
     const projectileId = `proj-${enemy.id}-${Date.now()}`;
@@ -402,13 +404,21 @@ export function CyberTypeDefense() {
       const explosionId = `expl-${enemy.id}-${Date.now()}`;
       const typeData = ENEMY_TYPES[enemy.type];
       dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
-      setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
+      
+      const removeExplosionTimeout = setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
 
       const delay = isPowerUp ? 0 : 300;
-      setTimeout(() => dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } }), delay);
+      const destroyEnemyTimeout = setTimeout(() => {
+        dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } });
+      }, delay);
+      
+      return () => {
+        clearTimeout(removeExplosionTimeout);
+        clearTimeout(destroyEnemyTimeout);
+      }
 
     }, 200); // projectile travel time
-  };
+  }, []);
   
   const spawnEnemy = useCallback(() => {
     if (state.status !== 'playing' || state.enemies.length > 15 + state.level) return;
