@@ -81,14 +81,14 @@ export const POWER_UP_TYPES: Record<PowerUpType, PowerUpInfo> = {
     Nuke: {
         icon: Bomb,
         className: 'text-destructive',
-        word: 'nuke',
+        word: 'reboot',
         duration: 0,
         effect: { value: 0 },
     },
     Shield: {
         icon: Shield,
         className: 'text-blue-500',
-        word: 'shield',
+        word: 'antivirus',
         duration: 0, 
         effect: { value: 5 }, // Grants 5 shield points
     },

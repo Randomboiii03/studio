@@ -98,7 +98,7 @@ const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 600;
 const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
-const TURRET_HITBOX_Y = GAME_HEIGHT - 80;
+const TURRET_HITBOX_Y = GAME_HEIGHT - 50;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
 let powerUpIdCounter = 0;
@@ -646,14 +646,23 @@ useEffect(() => {
 
   // Power-up spawner
   useEffect(() => {
-      if (status !== 'playing') return;
+    if (status !== 'playing') return;
+
+    // Wait 5 seconds before starting to spawn power-ups
+    const initialDelay = setTimeout(() => {
       const interval = setInterval(() => {
-          if (Math.random() < 0.25) { // 25% chance to spawn every 10 seconds
-              dispatch({ type: 'ADD_POWERUP' });
-          }
+        if (status === 'playing' && Math.random() < 0.25) { // 25% chance to spawn every 10 seconds
+          dispatch({ type: 'ADD_POWERUP' });
+        }
       }, 10000);
+
+      // Cleanup function for the interval
       return () => clearInterval(interval);
-  }, [status]);
+    }, 5000);
+
+    // Cleanup function for the initial timeout
+    return () => clearTimeout(initialDelay);
+  }, [status, level]); // Also reset on level up
 
 
   // Effect and entity cleanup loop
