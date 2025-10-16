@@ -70,6 +70,7 @@ type GameState = {
   isShaking: boolean;
   inputErrorShake: boolean;
   nukeEffect: boolean;
+  lastHitTime: number;
 };
 
 type Action =
@@ -94,7 +95,8 @@ type Action =
   | { type: 'POWERUP_HIT'; payload: { powerUpId: number } }
   | { type: 'ACTIVATE_POWERUP', payload: { type: PowerUpType } }
   | { type: 'TRIGGER_NUKE_EFFECT' }
-  | { type: 'STOP_NUKE_EFFECT' };
+  | { type: 'STOP_NUKE_EFFECT' }
+  | { type: 'RESET_COMBO' };
 
 
 const INITIAL_LIVES = 10;
@@ -105,6 +107,7 @@ const TURRET_HITBOX_Y = GAME_HEIGHT - 50;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
 let powerUpIdCounter = 0;
+const COMBO_TIMEOUT = 3000; // 3 seconds
 
 const initialState: GameState = {
   status: 'idle',
@@ -122,6 +125,7 @@ const initialState: GameState = {
   isShaking: false,
   inputErrorShake: false,
   nukeEffect: false,
+  lastHitTime: 0,
 };
 
 const spawnEnemy = (level: number, word: string): Enemy => {
@@ -187,12 +191,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return {
         ...initialState,
         status: 'playing',
+        lastHitTime: Date.now(),
       };
     case 'RESET_GAME':
       enemyIdCounter = 0;
       effectIdCounter = 0;
       powerUpIdCounter = 0;
-      return { ...initialState, status: 'playing' };
+      return { ...initialState, status: 'playing', lastHitTime: Date.now() };
 
     case 'EXIT_GAME':
         return { ...initialState };
@@ -201,7 +206,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return state.status === 'playing' ? { ...state, status: 'paused' } : state;
 
     case 'RESUME_GAME':
-      return state.status === 'paused' ? { ...state, status: 'playing' } : state;
+      return state.status === 'paused' ? { ...state, status: 'playing', lastHitTime: Date.now() } : state;
 
     case 'INPUT_CHANGE':
       return { ...state, inputValue: action.payload };
@@ -261,6 +266,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       hitProjectiles.forEach(targetId => {
         nextState = gameReducer(nextState, { type: 'PROJECTILE_HIT', payload: { targetId } });
       });
+
+      // Check for combo timeout
+      if (state.combo > 0 && now - state.lastHitTime > COMBO_TIMEOUT) {
+        nextState = gameReducer(nextState, { type: 'RESET_COMBO' });
+      }
 
       // Check for enemies reaching the end
       const enemiesReachedEnd = nextState.enemies.filter(e => e.y >= TURRET_HITBOX_Y && e.status === 'alive');
@@ -336,6 +346,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         enemies: updatedEnemies,
         projectiles: state.projectiles.filter(p => p.targetId !== targetId),
         explosions: [...state.explosions, newExplosion],
+        lastHitTime: Date.now(),
       };
     }
     
@@ -473,7 +484,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
                 const explosions = nonBossEnemies.map(enemy => {
                     currentCombo++;
-                    scoreGained += enemy.words[enemy.currentWordIndex].length * 10 * (currentCombo > 1 ? currentCombo : 1);
+                    scoreGained += 50; // Flat score per nuked enemy
                     return {
                         id: `expl-${enemy.id}-${effectIdCounter++}`,
                         x: enemy.x,
@@ -486,6 +497,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 newState.explosions = [...newState.explosions, ...explosions];
                 newState.score += scoreGained;
                 newState.combo = currentCombo;
+                newState.lastHitTime = Date.now(); // A nuke counts as a "hit"
                 newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
             }
@@ -507,7 +519,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     
     case 'STOP_NUKE_EFFECT':
         return { ...state, nukeEffect: false };
-
+    
+    case 'RESET_COMBO':
+      return { ...state, combo: 0 };
     
     default:
       return state;
@@ -828,5 +842,7 @@ useEffect(() => {
     </div>
   );
 }
+
+    
 
     
