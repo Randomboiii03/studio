@@ -107,7 +107,7 @@ const TURRET_HITBOX_Y = GAME_HEIGHT - 50;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
 let powerUpIdCounter = 0;
-const COMBO_TIMEOUT = 3000; // 3 seconds
+const COMBO_TIMEOUT = 6000; // 6 seconds
 
 const initialState: GameState = {
   status: 'idle',
@@ -367,7 +367,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         
         const updatedEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
 
-        let newState = {
+        let newState: GameState = {
             ...state,
             lives: newLives,
             shield: newShield,
@@ -481,9 +481,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
                 let currentCombo = newState.combo;
                 let scoreGained = 0;
-
+                
                 const explosions = nonBossEnemies.map(enemy => {
-                    currentCombo++;
                     scoreGained += 50; // Flat score per nuked enemy
                     return {
                         id: `expl-${enemy.id}-${effectIdCounter++}`,
@@ -496,8 +495,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 newState.enemies = newState.enemies.map(e => (!e.isBoss && e.status === 'alive') ? {...e, status: 'dying'} : e);
                 newState.explosions = [...newState.explosions, ...explosions];
                 newState.score += scoreGained;
-                newState.combo = currentCombo;
-                newState.lastHitTime = Date.now(); // A nuke counts as a "hit"
+                newState.lastHitTime = Date.now();
                 newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
             }

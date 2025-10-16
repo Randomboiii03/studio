@@ -30,7 +30,7 @@ const PowerUpComponent: React.FC<PowerUpProps> = ({ type, x, y, word, status }) 
   return (
     <div
       className={cn(
-        "absolute flex flex-col items-center group transition-all duration-500 ease-out",
+        "absolute flex flex-col items-center group transition-all duration-500 ease-out animate-hover-float",
         visible && !isDying ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
       )}
       style={{
