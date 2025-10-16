@@ -2,11 +2,9 @@ import { Shield, Zap, Snowflake, Bomb, ShieldCheck, Heart, Scan, Rewind, type Lu
 
 export const POWER_UPS = [
   { name: 'Freeze', effect: 'Halts all enemies for a short duration.', keywords: ['quarantine', 'lockdown'], icon: Snowflake, duration: 3000, color: 'text-cyan-400' },
-  { name: 'Second Chance', effect: 'Prevents turret damage from the next enemy hit.', keywords: ['rollback', 'restore'], icon: ShieldCheck, duration: Infinity, oneTime: true, color: 'text-green-400' },
+  { name: 'Shield', effect: 'Prevents turret damage from the next enemy hit.', keywords: ['firewall', 'defend'], icon: Shield, duration: 5000, color: 'text-blue-500' },
   { name: 'Frenzy', effect: 'Destroys all on-screen enemies instantly.', keywords: ['purge', 'cleanse'], icon: Bomb, duration: 0, color: 'text-red-500' },
-  { name: 'Shield', effect: 'Grants temporary invulnerability to the turret.', keywords: ['firewall', 'defend'], icon: Shield, duration: 5000, color: 'text-blue-500' },
   { name: 'Overclock', effect: 'Doubles score gain for a short time.', keywords: ['boost', 'amplify'], icon: Zap, duration: 7000, color: 'text-yellow-400' },
-  { name: 'Scan', effect: 'Reveals hidden or cloaked enemies.', keywords: ['detect', 'audit'], icon: Scan, duration: 0, color: 'text-gray-400' },
   { name: 'Slowdown', effect: 'Reduces the speed of all enemies temporarily.', keywords: ['throttle', 'ratelimit'], icon: Rewind, duration: 5000, color: 'text-purple-400' },
   { name: 'Heal', effect: 'Restores turret health.', keywords: ['patch', 'update'], icon: Heart, duration: 0, color: 'text-pink-500' }
 ] as const;

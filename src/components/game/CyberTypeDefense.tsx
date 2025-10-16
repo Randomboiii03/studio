@@ -53,10 +53,14 @@ type Action =
   | { type: 'GAME_TICK'; delta: number }
   | { type: 'INPUT_CHANGE'; value: string }
   | { type: 'RESET_GAME' }
+  | { type: 'ADD_ENEMY'; payload: Enemy }
+  | { type: 'DESTROY_ENEMY'; payload: { enemy: Enemy } }
   | { type: 'ADD_EXPLOSION'; payload: Explosion }
   | { type: 'REMOVE_EXPLOSION'; payload: { id: number } }
-  | { type: 'ACTIVATE_POWERUP'; payload: typeof POWER_UPS[number] };
-
+  | { type: 'ACTIVATE_POWERUP'; payload: typeof POWER_UPS[number] }
+  | { type: 'DEACTIVATE_POWERUP'; payload: { name: string } }
+  | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
+  | { type: 'SET_LIVES'; payload: number };
 
 const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
@@ -97,6 +101,20 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'INPUT_CHANGE':
       return { ...state, inputValue: action.value };
 
+    case 'ADD_ENEMY':
+      return { ...state, enemies: [...state.enemies, action.payload] };
+    
+    case 'DESTROY_ENEMY': {
+      const { enemy } = action.payload;
+      const scoreGained = enemy.word.length * 10 * state.combo * state.effects.scoreMultiplier;
+      return {
+        ...state,
+        score: state.score + scoreGained,
+        combo: state.combo + 1,
+        enemies: state.enemies.filter(e => e.id !== enemy.id),
+      };
+    }
+
     case 'GAME_TICK': {
       if (state.status !== 'playing') return state;
 
@@ -126,7 +144,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [] };
       }
       
-      return { ...state, enemies: newEnemies, lives: newLives, combo: newCombo };
+      const newLevel = Math.floor(state.score / 1000) + 1;
+
+      return { ...state, enemies: newEnemies, lives: newLives, combo: newCombo, level: newLevel };
     }
     
     case 'ADD_EXPLOSION':
@@ -134,6 +154,28 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       
     case 'REMOVE_EXPLOSION':
       return { ...state, explosions: state.explosions.filter(e => e.id !== action.payload.id) };
+
+    case 'ACTIVATE_POWERUP': {
+      const { payload: powerUp } = action;
+      
+      const existingPowerup = state.activePowerUps.find(p => p.name === powerUp.name);
+      if (existingPowerup) {
+        clearTimeout(existingPowerup.timeoutId);
+      }
+      
+      const otherPowerups = state.activePowerUps.filter(p => p.name !== powerUp.name);
+
+      return { ...state, activePowerUps: [...otherPowerups, action.payload as unknown as ActivePowerUp] };
+    }
+    case 'DEACTIVATE_POWERUP': {
+      return { ...state, activePowerUps: state.activePowerUps.filter(p => p.name !== action.payload.name) };
+    }
+    
+    case 'SET_EFFECTS':
+        return { ...state, effects: { ...state.effects, ...action.payload } };
+
+    case 'SET_LIVES':
+        return { ...state, lives: action.payload };
 
     default:
       return state;
@@ -173,70 +215,56 @@ export function CyberTypeDefense() {
         description: powerUp.effect,
     });
     
-    const newActivePowerUp = {
-      name: powerUp.name,
-      timeoutId: setTimeout(() => {}, 0), // placeholder
-      color: powerUp.color,
-    };
-    
-    let newState = { ...state };
-    
     switch(powerUp.name) {
       case 'Freeze':
-        newState.effects.isFrozen = true;
+        dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: true } });
         break;
       case 'Shield':
-        newState.effects.isShielded = true;
+        dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } });
         break;
       case 'Slowdown':
-        newState.effects.isSlowed = true;
+        dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: true } });
         break;
       case 'Overclock':
-        newState.effects.scoreMultiplier = 2;
+        dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 2 } });
         break;
       case 'Frenzy':
-        newState.enemies.forEach(enemy => destroyEnemy(enemy, newState));
-        newState.enemies = [];
+        state.enemies.forEach(enemy => destroyEnemy(enemy, true));
         break;
       case 'Heal':
-        newState.lives = Math.min(INITIAL_LIVES, newState.lives + 3);
+        dispatch({ type: 'SET_LIVES', payload: Math.min(INITIAL_LIVES, state.lives + 3) });
         break;
     }
     
     if(powerUp.duration > 0 && powerUp.duration !== Infinity) {
-        newActivePowerUp.timeoutId = setTimeout(() => {
-            const tempState = {...state};
+        const timeoutId = setTimeout(() => {
+            dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
             switch(powerUp.name) {
-                case 'Freeze': tempState.effects.isFrozen = false; break;
-                case 'Shield': tempState.effects.isShielded = false; break;
-                case 'Slowdown': tempState.effects.isSlowed = false; break;
-                case 'Overclock': tempState.effects.scoreMultiplier = 1; break;
+                case 'Freeze': dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: false } }); break;
+                case 'Shield': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
+                case 'Slowdown': dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: false } }); break;
+                case 'Overclock': dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 1 } }); break;
             }
-            // Cannot dispatch from here.
         }, powerUp.duration);
+        
+        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId } });
+    } else {
+        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId: setTimeout(() => {}, 0) } });
     }
-    // Cannot dispatch from here. A more complex reducer is needed.
-    // For simplicity, direct mutation-like behavior is simulated here for powerups.
-    // In a real scenario, this should be handled inside the reducer.
-  }, [state]);
+  }, [state.enemies, state.lives]);
   
 
-  const destroyEnemy = (enemy: Enemy, currentState = state) => {
-    const scoreGained = enemy.word.length * 10 * currentState.combo * currentState.effects.scoreMultiplier;
+  const destroyEnemy = (enemy: Enemy, isFrenzy = false) => {
+    dispatch({ type: 'DESTROY_ENEMY', payload: { enemy } });
     
-    dispatch({ type: 'ADD_EXPLOSION', payload: { id: enemy.id, word: enemy.word, x: enemy.x, y: enemy.y, type: enemy.type } });
-    setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: enemy.id } }), 300);
-
-    const combo = currentState.combo + 1;
-    const score = currentState.score + scoreGained;
-    const enemies = currentState.enemies.filter(e => e.id !== enemy.id);
-    // This is not ideal, should be a dispatch.
-    // Let's create a DESTROY_ENEMY action.
-    const reducer = (s: GameState): GameState => ({...s, score, combo, enemies });
+    if (!isFrenzy) {
+        dispatch({ type: 'ADD_EXPLOSION', payload: { id: enemy.id, word: enemy.word, x: enemy.x, y: enemy.y, type: enemy.type } });
+        setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: enemy.id } }), 300);
+    }
   };
   
   const spawnEnemy = useCallback(() => {
-    if (state.enemies.length > 15 + state.level) return;
+    if (state.status !== 'playing' || state.enemies.length > 15 + state.level) return;
 
     const spawnInterval = Math.max(200, 3000 - state.level * 100);
     if (enemySpawnTimerRef.current > spawnInterval) {
@@ -256,10 +284,9 @@ export function CyberTypeDefense() {
         type,
       };
 
-      // Not ideal, should be a dispatch
-      state.enemies.push(newEnemy);
+      dispatch({ type: 'ADD_ENEMY', payload: newEnemy });
     }
-  }, [state.level, state.enemies.length]);
+  }, [state.level, state.enemies.length, state.status]);
 
   const gameLoop = useCallback((time: number) => {
     if (!lastTimeRef.current) {
@@ -282,12 +309,15 @@ export function CyberTypeDefense() {
     if (state.status === 'playing') {
       inputRef.current?.focus();
       lastTimeRef.current = undefined;
+      enemyIdCounter = 0;
+      enemySpawnTimerRef.current = 0;
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     }
     return () => {
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
       }
+      state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
     };
   }, [state.status, gameLoop]);
 
