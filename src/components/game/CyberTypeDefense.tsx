@@ -310,20 +310,28 @@ export function CyberTypeDefense() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (state.status !== 'playing') return;
-    const value = e.target.value.toLowerCase();
-    dispatch({ type: 'INPUT_CHANGE', value });
+    dispatch({ type: 'INPUT_CHANGE', value: e.target.value });
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && state.status === 'playing') {
+      const value = state.inputValue.trim().toLowerCase();
+      if (!value) return;
 
-    const powerUp = POWER_UPS.find(p => p.keywords.includes(value));
-    if (powerUp) {
-      activatePowerUp(powerUp);
-      dispatch({ type: 'INPUT_CHANGE', value: '' });
-      return;
-    }
+      const powerUp = POWER_UPS.find(p => p.keywords.includes(value));
+      if (powerUp) {
+        activatePowerUp(powerUp);
+        dispatch({ type: 'INPUT_CHANGE', value: '' });
+        return;
+      }
 
-    const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
-    if (matchedEnemy) {
-      destroyEnemy(matchedEnemy);
-      dispatch({ type: 'INPUT_CHANGE', value: '' });
+      const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
+      if (matchedEnemy) {
+        destroyEnemy(matchedEnemy);
+        dispatch({ type: 'INPUT_CHANGE', value: '' });
+      } else {
+        dispatch({ type: 'INPUT_CHANGE', value: '' });
+      }
     }
   };
   
@@ -337,7 +345,7 @@ export function CyberTypeDefense() {
 
     switch(powerUp.name) {
       case 'Frenzy':
-        state.enemies.forEach(enemy => destroyEnemy(enemy, true));
+        state.enemies.filter(e => e.status === 'alive').forEach(enemy => destroyEnemy(enemy, true));
         break;
       case 'Freeze':
         dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: true } });
@@ -355,7 +363,7 @@ export function CyberTypeDefense() {
         dispatch({ type: 'SET_LIVES', payload: Math.min(INITIAL_LIVES, state.lives + 3) });
         break;
       case 'Nuke':
-        state.enemies.forEach(enemy => destroyEnemy(enemy, true));
+        state.enemies.filter(e => e.status === 'alive').forEach(enemy => destroyEnemy(enemy, true));
         break;
       case 'King':
         dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } }); // For King, we can re-use shield
@@ -383,7 +391,7 @@ export function CyberTypeDefense() {
   }, [state.enemies, state.lives, toast]);
   
 
-  const destroyEnemy = (enemy: Enemy, isFrenzy = false) => {
+  const destroyEnemy = (enemy: Enemy, isPowerUp = false) => {
     dispatch({ type: 'ENEMY_HIT', payload: { enemyId: enemy.id } });
 
     const projectileId = `proj-${enemy.id}-${Date.now()}`;
@@ -396,11 +404,9 @@ export function CyberTypeDefense() {
       dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
       setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
 
-      if (!isFrenzy) {
-        setTimeout(() => dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } }), 300); // fade out time
-      } else {
-        dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } });
-      }
+      const delay = isPowerUp ? 0 : 300;
+      setTimeout(() => dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } }), delay);
+
     }, 200); // projectile travel time
   };
   
@@ -494,7 +500,7 @@ export function CyberTypeDefense() {
         ref={gameAreaRef}
         className={cn(
           "relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
-          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
+          state.lives < INITIAL_LIVES && state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
         )}
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
@@ -520,7 +526,7 @@ export function CyberTypeDefense() {
             ))}
             
             {state.projectiles.map(p => (
-              <div key={p.id} className="absolute w-1 h-4 bg-primary/80 rounded-full shadow-[0_0_10px] shadow-primary" style={{ left: p.x, top: p.y, transform: `rotate(${Math.atan2(p.targetY - p.y, p.targetX - p.x)}rad) translate(0, -50%)` }} />
+              <div key={p.id} className="absolute w-2 h-2 bg-primary rounded-full shadow-[0_0_10px] shadow-primary" style={{ left: p.x, top: p.y, transform: `translate(-50%, -50%)` }} />
             ))}
 
             {state.explosions.map(explosion => (
@@ -546,6 +552,7 @@ export function CyberTypeDefense() {
                 placeholder={state.status === 'playing' ? "TYPE HERE" : ''}
                 value={state.inputValue}
                 onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
                 disabled={state.status !== 'playing'}
                 autoComplete="off"
                 autoCorrect="off"
@@ -586,6 +593,8 @@ export function CyberTypeDefense() {
     </div>
   );
 }
+
+    
 
     
 
