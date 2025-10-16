@@ -304,8 +304,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       if (!enemy || enemy.status === 'dying') {
           return state;
       }
-
-      const scoreGained = enemy.words[enemy.currentWordIndex].length * 10 * (state.combo > 0 ? state.combo : 1);
+      
+      const newCombo = state.combo + 1;
+      const scoreGained = enemy.words[enemy.currentWordIndex].length * 10 * (newCombo > 1 ? newCombo : 1);
       const explosionId = `expl-${targetId}-${effectIdCounter++}`;
       const typeData = ENEMY_TYPES[enemy.type];
       const newExplosion: Explosion = {
@@ -331,7 +332,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       return {
         ...state,
         score: state.score + scoreGained,
-        combo: state.combo + 1,
+        combo: newCombo,
         enemies: updatedEnemies,
         projectiles: state.projectiles.filter(p => p.targetId !== targetId),
         explosions: [...state.explosions, newExplosion],
@@ -349,11 +350,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         const newShield = state.shield - shieldDamage;
         const newLives = state.lives - lifeDamage;
 
-        const updatedEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
-
         if (newLives <= 0) {
             return { ...state, status: 'gameOver', lives: 0, shield: 0, enemies: [], projectiles: [] };
         }
+        
+        const updatedEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
 
         let newState = {
             ...state,
@@ -364,8 +365,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             isShaking: true,
         };
         
-        const remainingEnemies = state.enemies.filter(e => e.id !== action.payload.enemyId);
-        if (state.enemies.length > 0 && remainingEnemies.length === 0) {
+        if (state.enemies.length > 0 && updatedEnemies.length === 0) {
           newState.level = state.level + 1;
         }
 
@@ -468,21 +468,24 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 if (nonBossEnemies.length === 0) break;
 
-                const explosions = nonBossEnemies.map(enemy => ({
-                    id: `expl-${enemy.id}-${effectIdCounter++}`,
-                    x: enemy.x,
-                    y: enemy.y,
-                    color: ENEMY_TYPES[enemy.type].className,
-                }));
-                
-                const scoreGained = nonBossEnemies.reduce((total, enemy) => {
-                    return total + (enemy.words[enemy.currentWordIndex].length * 10 * (newState.combo + total / 10 + 1));
-                }, 0);
+                let currentCombo = newState.combo;
+                let scoreGained = 0;
+
+                const explosions = nonBossEnemies.map(enemy => {
+                    currentCombo++;
+                    scoreGained += enemy.words[enemy.currentWordIndex].length * 10 * (currentCombo > 1 ? currentCombo : 1);
+                    return {
+                        id: `expl-${enemy.id}-${effectIdCounter++}`,
+                        x: enemy.x,
+                        y: enemy.y,
+                        color: ENEMY_TYPES[enemy.type].className,
+                    };
+                });
                 
                 newState.enemies = newState.enemies.map(e => (!e.isBoss && e.status === 'alive') ? {...e, status: 'dying'} : e);
                 newState.explosions = [...newState.explosions, ...explosions];
                 newState.score += scoreGained;
-                newState.combo += nonBossEnemies.length;
+                newState.combo = currentCombo;
                 newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
             }
