@@ -22,6 +22,7 @@ type Enemy = {
   type: keyof typeof ENEMY_TYPES;
   vx: number;
   vy: number;
+  status: 'alive' | 'dying';
 };
 
 type Projectile = {
@@ -67,7 +68,8 @@ type Action =
   | { type: 'INPUT_CHANGE'; value: string }
   | { type: 'RESET_GAME' }
   | { type: 'ADD_ENEMY'; payload: Enemy }
-  | { type: 'DESTROY_ENEMY'; payload: { enemy: Enemy } }
+  | { type: 'ENEMY_HIT'; payload: { enemyId: number } }
+  | { type: 'DESTROY_ENEMY'; payload: { enemyId: number } }
   | { type: 'ADD_PROJECTILE'; payload: Projectile }
   | { type: 'REMOVE_PROJECTILE'; payload: { id: string } }
   | { type: 'ADD_EXPLOSION'; payload: Explosion }
@@ -76,7 +78,8 @@ type Action =
   | { type: 'DEACTIVATE_POWERUP'; payload: { name: string } }
   | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
   | { type: 'SET_LIVES'; payload: number }
-  | { type: 'TRIGGER_SHAKE' };
+  | { type: 'TRIGGER_SHAKE' }
+  | { type: 'STOP_SHAKE' };
 
 const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
@@ -124,14 +127,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'ADD_ENEMY':
       return { ...state, enemies: [...state.enemies, action.payload] };
     
-    case 'DESTROY_ENEMY': {
-      const { enemy } = action.payload;
+    case 'ENEMY_HIT': {
+      const enemy = state.enemies.find(e => e.id === action.payload.enemyId);
+      if (!enemy) return state;
+
       const scoreGained = enemy.word.length * 10 * state.combo * state.effects.scoreMultiplier;
       return {
         ...state,
         score: state.score + scoreGained,
         combo: state.combo + 1,
-        enemies: state.enemies.filter(e => e.id !== enemy.id),
+        enemies: state.enemies.map(e => e.id === action.payload.enemyId ? { ...e, status: 'dying' } : e),
+      };
+    }
+    
+    case 'DESTROY_ENEMY': {
+      return {
+        ...state,
+        enemies: state.enemies.filter(e => e.id !== action.payload.enemyId),
       };
     }
     
@@ -158,16 +170,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         y: enemy.y + enemy.vy * action.delta * 60 * speedModifier,
       })).filter(enemy => {
         if (enemy.y >= GAME_HEIGHT) {
-          if (!state.effects.isShielded) {
-            newLives -= 1;
-            triggerShake = true;
+          if (enemy.status === 'alive') {
+            if (!state.effects.isShielded) {
+              newLives -= 1;
+              triggerShake = true;
+            }
+            newCombo = 1;
           }
-          newCombo = 1;
           if (newLives <= 0) gameOver = true;
           return false;
         }
         return true;
       });
+      
+      if (triggerShake) {
+        return { ...state, enemies: newEnemies, lives: newLives, combo: newCombo, isShaking: true };
+      }
+
 
       if (gameOver) {
         return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [], isShaking: false };
@@ -189,7 +208,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
       const newLevel = Math.floor(state.score / 1000) + 1;
 
-      return { ...state, projectiles: newProjectiles, enemies: newEnemies, lives: newLives, combo: newCombo, level: newLevel, isShaking: triggerShake || state.isShaking };
+      return { ...state, projectiles: newProjectiles, enemies: newEnemies, lives: newLives, combo: newCombo, level: newLevel };
     }
     
     case 'ADD_EXPLOSION':
@@ -222,6 +241,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     
     case 'TRIGGER_SHAKE':
       return {...state, isShaking: true};
+      
+    case 'STOP_SHAKE':
+      return {...state, isShaking: false};
 
     default:
       return state;
@@ -252,17 +274,16 @@ export function CyberTypeDefense() {
   useEffect(() => {
     if (state.isShaking) {
       if(shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
-      shakeTimeoutRef.current = setTimeout(() => {
-        if(gameAreaRef.current) gameAreaRef.current.classList.remove('animate-screen-shake');
-        dispatch({ type: 'GAME_TICK', delta: 0 }); // to update state
-      }, 400);
+      
       if(gameAreaRef.current) {
+        gameAreaRef.current.classList.remove('animate-screen-shake');
+        void gameAreaRef.current.offsetWidth; // trigger reflow
         gameAreaRef.current.classList.add('animate-screen-shake');
-        // Reset animation
-        gameAreaRef.current.style.animation = 'none';
-        gameAreaRef.current.offsetHeight; /* trigger reflow */
-        gameAreaRef.current.style.animation = '';
       }
+
+      shakeTimeoutRef.current = setTimeout(() => {
+        dispatch({ type: 'STOP_SHAKE' });
+      }, 400);
     }
   }, [state.isShaking]);
 
@@ -277,7 +298,7 @@ export function CyberTypeDefense() {
       return;
     }
 
-    const matchedEnemy = state.enemies.find(enemy => enemy.word === value);
+    const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
     if (matchedEnemy) {
       destroyEnemy(matchedEnemy);
       dispatch({ type: 'INPUT_CHANGE', value: '' });
@@ -290,6 +311,8 @@ export function CyberTypeDefense() {
         description: powerUp.effect,
     });
     
+    let isInstant = powerUp.duration === 0;
+
     switch(powerUp.name) {
       case 'Frenzy':
         state.enemies.forEach(enemy => destroyEnemy(enemy, true));
@@ -309,9 +332,15 @@ export function CyberTypeDefense() {
       case 'Heal':
         dispatch({ type: 'SET_LIVES', payload: Math.min(INITIAL_LIVES, state.lives + 3) });
         break;
+      case 'Nuke':
+        state.enemies.forEach(enemy => destroyEnemy(enemy, true));
+        break;
+      case 'King':
+        dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } }); // For King, we can re-use shield
+        break;
     }
     
-    if(powerUp.duration > 0 && powerUp.duration !== Infinity) {
+    if(!isInstant) {
         const timeoutId = setTimeout(() => {
             dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
             switch(powerUp.name) {
@@ -319,31 +348,38 @@ export function CyberTypeDefense() {
                 case 'Shield': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
                 case 'Slowdown': dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: false } }); break;
                 case 'Overclock': dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 1 } }); break;
+                case 'King': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
             }
         }, powerUp.duration);
         
         dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId } });
     } else {
-        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId: setTimeout(() => {}, 0) } });
+        dispatch({ type: 'ACTIVATE_POWERUP', payload: { ...powerUp, timeoutId: setTimeout(() => {
+            dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
+        }, 500) } });
     }
   }, [state.enemies, state.lives]);
   
 
   const destroyEnemy = (enemy: Enemy, isFrenzy = false) => {
-    dispatch({ type: 'DESTROY_ENEMY', payload: { enemy } });
+    dispatch({ type: 'ENEMY_HIT', payload: { enemyId: enemy.id } });
 
-    const projectileId = `${enemy.id}-proj-${Date.now()}`;
+    const projectileId = `proj-${enemy.id}-${Date.now()}`;
     dispatch({ type: 'ADD_PROJECTILE', payload: { id: projectileId, x: TURRET_POSITION.x, y: TURRET_POSITION.y, targetX: enemy.x, targetY: enemy.y } });
     
-    if (!isFrenzy) {
-        setTimeout(() => {
-          dispatch({ type: 'REMOVE_PROJECTILE', payload: { id: projectileId } });
-          const explosionId = `${enemy.id}-expl-${Date.now()}`;
-          const typeData = ENEMY_TYPES[enemy.type];
-          dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
-          setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
-        }, 200); // projectile travel time
-    }
+    setTimeout(() => {
+      dispatch({ type: 'REMOVE_PROJECTILE', payload: { id: projectileId } });
+      const explosionId = `expl-${enemy.id}-${Date.now()}`;
+      const typeData = ENEMY_TYPES[enemy.type];
+      dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
+      setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
+
+      if (!isFrenzy) {
+        setTimeout(() => dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } }), 300); // fade out time
+      } else {
+        dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } });
+      }
+    }, 200); // projectile travel time
   };
   
   const spawnEnemy = useCallback(() => {
@@ -358,7 +394,7 @@ export function CyberTypeDefense() {
       const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
       const baseSpeed = 0.5 + state.level * 0.1;
       
-      const startX = Math.random() * (GAME_WIDTH - 100);
+      const startX = Math.random() * (GAME_WIDTH - 100) + 50;
       const startY = -50;
       
       const angle = Math.atan2(TURRET_POSITION.y - startY, TURRET_POSITION.x - startX);
@@ -373,6 +409,7 @@ export function CyberTypeDefense() {
         type,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
+        status: 'alive'
       };
 
       dispatch({ type: 'ADD_ENEMY', payload: newEnemy });
@@ -414,12 +451,12 @@ export function CyberTypeDefense() {
   }, [state.status, gameLoop]);
 
   return (
-    <div className="w-full flex flex-col items-center gap-4">
+    <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
       <div 
         ref={gameAreaRef}
         className={cn(
           "relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
-          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
+          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive animate-screen-shake"
         )}
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
@@ -498,3 +535,5 @@ export function CyberTypeDefense() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -9,29 +10,37 @@ interface EnemyProps {
   x: number;
   y: number;
   type: keyof typeof ENEMY_TYPES;
+  status: 'alive' | 'dying';
 }
 
-const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type }) => {
+const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type, status }) => {
   const typeData = ENEMY_TYPES[type] || ENEMY_TYPES['Malware'];
   const Icon = typeData.icon;
 
   return (
     <div
-      className="absolute flex flex-col items-center group"
+      className={cn(
+        "absolute flex flex-col items-center group transition-opacity duration-300",
+        status === 'dying' ? 'opacity-0' : 'opacity-100'
+      )}
       style={{
         left: `${x}px`,
         top: `${y}px`,
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <div className={cn("relative w-24 h-16 flex items-center justify-center", typeData.className)}>
-        <Icon className="w-12 h-12 transition-transform duration-300 group-hover:scale-110" style={{ filter: `drop-shadow(0 0 5px currentColor)`}} />
+      <div className={cn("relative w-auto h-16 flex items-center justify-center px-4 rounded-md", typeData.className)} style={{ filter: `drop-shadow(0 0 8px currentColor)`}}>
+        <Icon className="w-8 h-8 mr-3" />
         <div
           className={cn(
-            "absolute inset-0 flex items-center justify-center font-mono font-bold tracking-widest text-foreground text-sm",
+            "font-mono font-bold tracking-widest text-foreground text-lg"
           )}
           style={{
-            textShadow: `0 0 8px currentColor`,
+            textShadow: `
+              0 0 5px #fff,
+              0 0 10px #fff,
+              0 0 15px hsl(var(--primary)),
+              0 0 20px hsl(var(--primary))`
           }}
         >
           {word}
@@ -42,3 +51,5 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type }) => {
 };
 
 export default React.memo(EnemyComponent);
+
+    
