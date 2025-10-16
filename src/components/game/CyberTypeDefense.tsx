@@ -10,6 +10,7 @@ import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
 import PauseMenu from './PauseMenu';
 import PowerUpComponent from './PowerUp';
+import StageAnnouncement from './StageAnnouncement';
 import { cn } from '@/lib/utils';
 import { Award, Heart, Pause, Zap, Shield as ShieldIcon } from 'lucide-react';
 import type { PowerUpType } from '@/lib/game-data';
@@ -63,6 +64,12 @@ type ActivePowerUp = {
   expiresAt: number;
 };
 
+type Announcement = {
+  id: number;
+  message: string;
+  icon: React.ElementType;
+};
+
 type GameState = {
   status: 'idle' | 'playing' | 'gameOver' | 'paused';
   score: number;
@@ -75,6 +82,7 @@ type GameState = {
   explosions: Explosion[];
   powerUps: PowerUp[];
   activePowerUps: ActivePowerUp[];
+  announcements: Announcement[];
   inputValue: string;
   isShaking: boolean;
   inputErrorShake: boolean;
@@ -105,7 +113,9 @@ type Action =
   | { type: 'ACTIVATE_POWERUP', payload: { type: PowerUpType } }
   | { type: 'TRIGGER_NUKE_EFFECT' }
   | { type: 'STOP_NUKE_EFFECT' }
-  | { type: 'RESET_COMBO' };
+  | { type: 'RESET_COMBO' }
+  | { type: 'ADD_ANNOUNCEMENT'; payload: Omit<Announcement, 'id'> }
+  | { type: 'REMOVE_ANNOUNCEMENT'; payload: { id: number } };
 
 
 const INITIAL_LIVES = 10;
@@ -116,6 +126,7 @@ const TURRET_HITBOX_Y = GAME_HEIGHT - 50;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
 let powerUpIdCounter = 0;
+let announcementIdCounter = 0;
 const COMBO_TIMEOUT = 6000; // 6 seconds
 
 const initialState: GameState = {
@@ -130,6 +141,7 @@ const initialState: GameState = {
   explosions: [],
   powerUps: [],
   activePowerUps: [],
+  announcements: [],
   inputValue: '',
   isShaking: false,
   inputErrorShake: false,
@@ -240,6 +252,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       enemyIdCounter = 0;
       effectIdCounter = 0;
       powerUpIdCounter = 0;
+      announcementIdCounter = 0;
       return {
         ...initialState,
         status: 'playing',
@@ -249,6 +262,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       enemyIdCounter = 0;
       effectIdCounter = 0;
       powerUpIdCounter = 0;
+      announcementIdCounter = 0;
       return { ...initialState, status: 'playing', lastHitTime: Date.now() };
 
     case 'EXIT_GAME':
@@ -635,6 +649,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
     case 'RESET_COMBO':
       return { ...state, combo: 0 };
     
+    case 'ADD_ANNOUNCEMENT': {
+        const newAnnouncement: Announcement = {
+            ...action.payload,
+            id: announcementIdCounter++,
+        };
+        return {
+            ...state,
+            announcements: [...state.announcements, newAnnouncement],
+        };
+    }
+    
+    case 'REMOVE_ANNOUNCEMENT':
+        return {
+            ...state,
+            announcements: state.announcements.filter(a => a.id !== action.payload.id),
+        };
+    
     default:
       return state;
   }
@@ -673,7 +704,7 @@ export function CyberTypeDefense() {
   const inputShakeTimeoutRef = useRef<NodeJS.Timeout>();
   const nukeTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, inputValue, isShaking, inputErrorShake, nukeEffect } = state;
+  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, announcements, inputValue, isShaking, inputErrorShake, nukeEffect } = state;
 
   useEffect(() => {
     if (isShaking) {
@@ -791,7 +822,7 @@ useEffect(() => {
     };
     
     // Add a slight delay before the next wave starts
-    const spawnTimeout = setTimeout(spawn, 1000);
+    const spawnTimeout = setTimeout(spawn, 2000);
     
     return () => clearTimeout(spawnTimeout);
 }, [status, level, enemies.length]);
@@ -806,7 +837,7 @@ useEffect(() => {
         }
     }, 10000);
 
-    // Wait 5 seconds before starting to spawn power-ups for the first time
+    // Wait 5 seconds before starting to spawn power-ups for the first time each level
     const initialTimeout = setTimeout(() => {
         if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
             dispatch({ type: 'ADD_POWERUP' });
@@ -819,6 +850,27 @@ useEffect(() => {
     };
 }, [status, level]);
 
+// Level Announcements
+useEffect(() => {
+    if (status !== 'playing') return;
+
+    const newThreats: {level: number, type: keyof typeof ENEMY_TYPES}[] = [
+      {level: 2, type: 'Stealth'},
+      {level: 3, type: 'Glitch'},
+      {level: 4, type: 'Splitter'},
+      {level: 5, type: 'Boss'},
+    ];
+
+    const threatForLevel = newThreats.find(t => t.level === level);
+    if(threatForLevel) {
+      const enemyInfo = ENEMY_TYPES[threatForLevel.type];
+      dispatch({ type: 'ADD_ANNOUNCEMENT', payload: {
+        message: `New Threat Detected: ${threatForLevel.type}`,
+        icon: enemyInfo.icon
+      }});
+    }
+
+}, [status, level]);
 
   // Effect and entity cleanup loop
   useEffect(() => {
@@ -862,6 +914,17 @@ useEffect(() => {
           </div>
         ) : (
           <>
+            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
+                {announcements.map(announcement => (
+                    <StageAnnouncement
+                        key={announcement.id}
+                        message={announcement.message}
+                        icon={announcement.icon}
+                        onComplete={() => dispatch({ type: 'REMOVE_ANNOUNCEMENT', payload: { id: announcement.id } })}
+                    />
+                ))}
+            </div>
+
             <div className="absolute inset-0 pointer-events-none z-10">
                 {isFrozen && <div className="absolute inset-0 bg-cyan-400/20 animate-pulse" />}
                 {nukeEffect && <div className="absolute inset-0 bg-white animate-fade-dots" />}
