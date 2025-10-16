@@ -4,14 +4,14 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, POWER_UPS, WORDS_LIST } from '@/lib/game-data';
+import { ENEMY_TYPES, POWER_UPS, WORDS_LIST } from '@/lib/game-data.tsx';
 import { useToast } from "@/hooks/use-toast";
-import Scoreboard from './Scoreboard';
 import PowerUpDisplay from './PowerUpDisplay';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
 import { cn } from '@/lib/utils';
+import { Award, Heart, Zap } from 'lucide-react';
 
 type Enemy = {
   id: number;
@@ -20,9 +20,19 @@ type Enemy = {
   y: number;
   speed: number;
   type: keyof typeof ENEMY_TYPES;
+  vx: number;
+  vy: number;
 };
 
-type Explosion = Omit<Enemy, 'speed' | 'id'> & { id: string };
+type Projectile = {
+  id: string;
+  x: number;
+  y: number;
+  targetX: number;
+  targetY: number;
+};
+
+type Explosion = { id: string; x: number; y: number; color: string; };
 
 type ActivePowerUp = {
   name: typeof POWER_UPS[number]['name'];
@@ -37,6 +47,7 @@ type GameState = {
   combo: number;
   level: number;
   enemies: Enemy[];
+  projectiles: Projectile[];
   explosions: Explosion[];
   activePowerUps: ActivePowerUp[];
   inputValue: string;
@@ -47,6 +58,7 @@ type GameState = {
     isSlowed: boolean;
     scoreMultiplier: number;
   };
+  isShaking: boolean;
 };
 
 type Action =
@@ -56,16 +68,21 @@ type Action =
   | { type: 'RESET_GAME' }
   | { type: 'ADD_ENEMY'; payload: Enemy }
   | { type: 'DESTROY_ENEMY'; payload: { enemy: Enemy } }
+  | { type: 'ADD_PROJECTILE'; payload: Projectile }
+  | { type: 'REMOVE_PROJECTILE'; payload: { id: string } }
   | { type: 'ADD_EXPLOSION'; payload: Explosion }
   | { type: 'REMOVE_EXPLOSION'; payload: { id: string } }
   | { type: 'ACTIVATE_POWERUP'; payload: typeof POWER_UPS[number] }
   | { type: 'DEACTIVATE_POWERUP'; payload: { name: string } }
   | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
-  | { type: 'SET_LIVES'; payload: number };
+  | { type: 'SET_LIVES'; payload: number }
+  | { type: 'TRIGGER_SHAKE' };
 
 const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 600;
+const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
+
 
 const initialState: GameState = {
   status: 'idle',
@@ -74,6 +91,7 @@ const initialState: GameState = {
   combo: 1,
   level: 1,
   enemies: [],
+  projectiles: [],
   explosions: [],
   activePowerUps: [],
   inputValue: '',
@@ -84,6 +102,7 @@ const initialState: GameState = {
     isSlowed: false,
     scoreMultiplier: 1,
   },
+  isShaking: false,
 };
 
 let enemyIdCounter = 0;
@@ -115,6 +134,12 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         enemies: state.enemies.filter(e => e.id !== enemy.id),
       };
     }
+    
+    case 'ADD_PROJECTILE':
+      return { ...state, projectiles: [...state.projectiles, action.payload] };
+      
+    case 'REMOVE_PROJECTILE':
+      return { ...state, projectiles: state.projectiles.filter(p => p.id !== action.payload.id) };
 
     case 'GAME_TICK': {
       if (state.status !== 'playing') return state;
@@ -123,16 +148,19 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       let newLives = state.lives;
       let newCombo = state.combo;
       let gameOver = false;
+      let triggerShake = false;
 
       const speedModifier = state.effects.isSlowed ? 0.5 : 1;
       
       newEnemies = state.effects.isFrozen ? newEnemies : newEnemies.map(enemy => ({
         ...enemy,
-        y: enemy.y + enemy.speed * action.delta * 60 * speedModifier,
+        x: enemy.x + enemy.vx * action.delta * 60 * speedModifier,
+        y: enemy.y + enemy.vy * action.delta * 60 * speedModifier,
       })).filter(enemy => {
         if (enemy.y >= GAME_HEIGHT) {
           if (!state.effects.isShielded) {
             newLives -= 1;
+            triggerShake = true;
           }
           newCombo = 1;
           if (newLives <= 0) gameOver = true;
@@ -142,12 +170,26 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       });
 
       if (gameOver) {
-        return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [] };
+        return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [], isShaking: false };
       }
       
+      const newProjectiles = state.projectiles.map(p => {
+        const dx = p.targetX - p.x;
+        const dy = p.targetY - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const moveX = (dx / dist) * 25; // Projectile speed
+        const moveY = (dy / dist) * 25;
+        return {...p, x: p.x + moveX, y: p.y + moveY};
+      }).filter(p => {
+        const dx = p.targetX - p.x;
+        const dy = p.targetY - p.y;
+        return (dx * dx + dy * dy) > 20*20;
+      });
+
+
       const newLevel = Math.floor(state.score / 1000) + 1;
 
-      return { ...state, enemies: newEnemies, lives: newLives, combo: newCombo, level: newLevel };
+      return { ...state, projectiles: newProjectiles, enemies: newEnemies, lives: newLives, combo: newCombo, level: newLevel, isShaking: triggerShake || state.isShaking };
     }
     
     case 'ADD_EXPLOSION':
@@ -177,11 +219,24 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
     case 'SET_LIVES':
         return { ...state, lives: action.payload };
+    
+    case 'TRIGGER_SHAKE':
+      return {...state, isShaking: true};
 
     default:
       return state;
   }
 };
+
+const StatItem = ({ icon: Icon, value, label, className }: { icon: React.ElementType, value: string | number, label: string, className?: string }) => (
+  <div className={`flex items-center gap-2 font-mono text-lg ${className}`}>
+      <Icon className="w-5 h-5" />
+      <div className="flex items-baseline gap-1.5">
+          <span className="font-bold text-2xl tracking-tighter">{value}</span>
+          <span className="text-sm text-muted-foreground">{label}</span>
+      </div>
+  </div>
+);
 
 export function CyberTypeDefense() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
@@ -191,6 +246,25 @@ export function CyberTypeDefense() {
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  
+  const shakeTimeoutRef = useRef<NodeJS.Timeout>();
+
+  useEffect(() => {
+    if (state.isShaking) {
+      if(shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+      shakeTimeoutRef.current = setTimeout(() => {
+        if(gameAreaRef.current) gameAreaRef.current.classList.remove('animate-screen-shake');
+        dispatch({ type: 'GAME_TICK', delta: 0 }); // to update state
+      }, 400);
+      if(gameAreaRef.current) {
+        gameAreaRef.current.classList.add('animate-screen-shake');
+        // Reset animation
+        gameAreaRef.current.style.animation = 'none';
+        gameAreaRef.current.offsetHeight; /* trigger reflow */
+        gameAreaRef.current.style.animation = '';
+      }
+    }
+  }, [state.isShaking]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toLowerCase();
@@ -257,11 +331,18 @@ export function CyberTypeDefense() {
 
   const destroyEnemy = (enemy: Enemy, isFrenzy = false) => {
     dispatch({ type: 'DESTROY_ENEMY', payload: { enemy } });
+
+    const projectileId = `${enemy.id}-proj-${Date.now()}`;
+    dispatch({ type: 'ADD_PROJECTILE', payload: { id: projectileId, x: TURRET_POSITION.x, y: TURRET_POSITION.y, targetX: enemy.x, targetY: enemy.y } });
     
     if (!isFrenzy) {
-        const explosionId = `${enemy.id}-${Date.now()}`;
-        dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, word: enemy.word, x: enemy.x, y: enemy.y, type: enemy.type } });
-        setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 300);
+        setTimeout(() => {
+          dispatch({ type: 'REMOVE_PROJECTILE', payload: { id: projectileId } });
+          const explosionId = `${enemy.id}-expl-${Date.now()}`;
+          const typeData = ENEMY_TYPES[enemy.type];
+          dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
+          setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
+        }, 200); // projectile travel time
     }
   };
   
@@ -276,14 +357,22 @@ export function CyberTypeDefense() {
       const enemyTypes = Object.keys(ENEMY_TYPES) as (keyof typeof ENEMY_TYPES)[];
       const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
       const baseSpeed = 0.5 + state.level * 0.1;
+      
+      const startX = Math.random() * (GAME_WIDTH - 100);
+      const startY = -50;
+      
+      const angle = Math.atan2(TURRET_POSITION.y - startY, TURRET_POSITION.x - startX);
+      const speed = baseSpeed * ENEMY_TYPES[type].speed;
 
       const newEnemy: Enemy = {
         id: enemyIdCounter++,
         word,
-        x: Math.random() * (GAME_WIDTH - 100),
-        y: -30,
-        speed: baseSpeed * ENEMY_TYPES[type].speed,
+        x: startX,
+        y: startY,
+        speed: speed,
         type,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
       };
 
       dispatch({ type: 'ADD_ENEMY', payload: newEnemy });
@@ -320,6 +409,7 @@ export function CyberTypeDefense() {
         cancelAnimationFrame(gameLoopRef.current);
       }
       state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
+      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
     };
   }, [state.status, gameLoop]);
 
@@ -327,26 +417,45 @@ export function CyberTypeDefense() {
     <div className="w-full flex flex-col items-center gap-4">
       <div 
         ref={gameAreaRef}
-        className="relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden"
+        className={cn(
+          "relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
+          state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
+        )}
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
         {state.status === 'playing' || state.status === 'gameOver' ? (
           <>
-            <Scoreboard score={state.score} lives={state.lives} combo={state.combo} level={state.level} />
+            <div className="absolute top-4 left-4 flex flex-col gap-2 text-primary p-2 rounded-lg bg-black/30 border border-primary/20 backdrop-blur-sm z-10">
+                <div className="flex items-center gap-4">
+                    <StatItem icon={Award} value={state.score.toLocaleString()} label="Score" className="text-primary" />
+                    <StatItem icon={Zap} value={`x${state.combo}`} label="Combo" className="text-yellow-400" />
+                    <StatItem icon={Heart} value={state.lives} label="Lives" className="text-red-500" />
+                </div>
+                <div className="text-center text-xs text-muted-foreground font-mono">LEVEL: {state.level}</div>
+            </div>
             <PowerUpDisplay activePowerUps={state.activePowerUps} />
             
             {state.enemies.map(enemy => (
               <EnemyComponent key={enemy.id} {...enemy} />
             ))}
+            
+            {state.projectiles.map(p => (
+              <div key={p.id} className="absolute w-1 h-4 bg-primary/80 rounded-full shadow-[0_0_10px] shadow-primary" style={{ left: p.x, top: p.y, transform: `rotate(${Math.atan2(p.targetY - p.y, p.targetX - p.x)}rad) translate(0, -50%)` }} />
+            ))}
+
             {state.explosions.map(explosion => (
-              <div
-                key={explosion.id}
-                className={cn("absolute font-mono font-bold tracking-widest animate-glitch", ENEMY_TYPES[explosion.type].className)}
-                style={{ left: explosion.x, top: explosion.y }}
-              >
-                {explosion.word}
+              <div key={explosion.id} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
+                      width: `${Math.random() * 6 + 2}px`,
+                      height: `${Math.random() * 6 + 2}px`,
+                      transform: `translate(${Math.random() * 40 - 20}px, ${Math.random() * 40 - 20}px)`,
+                      animationDelay: `${Math.random() * 0.1}s`,
+                    }} />
+                ))}
               </div>
             ))}
+
             <Turret />
 
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-80">

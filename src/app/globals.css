@@ -92,22 +92,41 @@
       linear-gradient(to right, hsl(var(--primary) / 0.05) 1px, hsl(var(--background)) 1px);
     background-size: 2rem 2rem;
   }
+  html, body {
+    overflow: hidden;
+    height: 100%;
+  }
   
-  @keyframes glitch {
-    0% { transform: translate(0); opacity: 1; }
-    10% { transform: translate(-3px, 3px); text-shadow: 1px 1px 10px hsl(var(--primary)); }
-    20% { transform: translate(3px, -3px); text-shadow: -1px -1px 10px hsl(var(--accent)); }
-    30% { transform: translate(-3px, -3px); }
-    40% { transform: translate(3px, 3px); }
-    50% { transform: translate(0); opacity: 0.8; }
-    60% { transform: translate(-3px, 3px); }
-    70% { transform: translate(3px, -3px); }
-    80% { transform: translate(-3px, -3px); }
-    90% { transform: translate(3px, 3px); }
-    100% { transform: translate(0); opacity: 1; }
+  @keyframes screen-shake {
+    0% { transform: translate(0, 0) rotate(0); }
+    10% { transform: translate(-2px, -3px) rotate(-0.5deg); }
+    20% { transform: translate(3px, 1px) rotate(0.5deg); }
+    30% { transform: translate(-1px, 2px) rotate(-0.5deg); }
+    40% { transform: translate(2px, -1px) rotate(0.5deg); }
+    50% { transform: translate(-3px, 1px) rotate(0); }
+    60% { transform: translate(1px, 3px) rotate(0.5deg); }
+    70% { transform: translate(-2px, -1px) rotate(-0.5deg); }
+    80% { transform: translate(3px, 2px) rotate(0.5deg); }
+    90% { transform: translate(-1px, -2px) rotate(0); }
+    100% { transform: translate(0, 0) rotate(0); }
   }
 
-  .animate-glitch {
-    animation: glitch 0.3s cubic-bezier(.25,.46,.45,.94) both;
+  .animate-screen-shake {
+    animation: screen-shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
   }
+  
+  @keyframes fade-dots {
+      0% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(2);
+        opacity: 0;
+      }
+    }
+
+    .animate-fade-dots {
+      animation: fade-dots 0.5s ease-out forwards;
+    }
 }
