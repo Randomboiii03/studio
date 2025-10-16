@@ -97,7 +97,7 @@ type Action =
 const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 600;
-const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 50 };
+const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
 const TURRET_HITBOX_Y = GAME_HEIGHT - 80;
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
@@ -729,11 +729,11 @@ useEffect(() => {
               </div>
             ))}
             
-            <div className="absolute bottom-[60px] left-1/2 -translate-x-1/2 z-20">
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20">
               <Turret />
             </div>
 
-            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 w-80">
+            <div className="absolute bottom-4 right-4 w-80">
                 <Input
                     ref={inputRef}
                     type="text"
@@ -750,7 +750,7 @@ useEffect(() => {
                 />
             </div>
             
-            <div className="absolute bottom-2 left-0 right-0 px-4 flex justify-between items-center z-20">
+            <div className="absolute bottom-4 left-4 flex justify-between items-center z-20">
                 <div className="flex-1 flex justify-start items-center gap-4">
                      <StatItem icon={Award} value={score.toLocaleString()} label="Score" className="text-primary" />
                      <StatItem icon={Heart} value={lives} label="Lives" className="text-red-500" />
