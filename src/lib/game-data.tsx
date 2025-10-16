@@ -1,5 +1,5 @@
 
-import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull, Snowflake, Bomb } from 'lucide-react';
+import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull, Snowflake, Bomb, EyeOff, Fingerprint, GitFork } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export const WORDS_LIST = [
@@ -30,7 +30,9 @@ export const WORDS_LIST = [
     // Secure Coding Practices
     "input", "validate", "sanitize", "escape", "review", "test", "guard",
     "exploit", "harden", "logic", "principle", "least"
-];
+].filter(w => w !== 'reboot' && w !== 'antivirus');
+
+export const GLITCH_WORDS_LIST = ["glitch", "static", "corrupt", "fragment", "error", "binary", "system", "kernel"];
 
 export const BOSS_WORDS_LIST = [
     ['check', 'sender', 'before', 'clicking', 'link'],
@@ -55,6 +57,10 @@ export const ENEMY_TYPES: { [key: string]: EnemyTypeInfo } = {
     Ransomware: { icon: Biohazard, className: 'text-threat-ransomware', speed: 1.1 },
     Spyware: { icon: ServerCrash, className: 'text-threat-spyware', speed: 1.3 },
     Adware: { icon: Bot, className: 'text-threat-adware', speed: 0.9 },
+    Stealth: { icon: EyeOff, className: 'text-threat-stealth', speed: 1.1 },
+    Glitch: { icon: Fingerprint, className: 'text-threat-glitch', speed: 1.0 },
+    Splitter: { icon: GitFork, className: 'text-threat-splitter', speed: 0.9 },
+    SplitterChild: { icon: GitFork, className: 'text-threat-splitter', speed: 1.5 },
     Boss: { icon: Skull, className: 'text-destructive', speed: 0.5 },
 };
 

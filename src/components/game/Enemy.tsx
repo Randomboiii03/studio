@@ -14,20 +14,27 @@ interface EnemyProps {
   type: keyof typeof ENEMY_TYPES;
   status: 'alive' | 'dying' | 'targeted';
   isBoss: boolean;
+  isStealthed?: boolean;
+  isSplitterChild?: boolean;
 }
 
-const EnemyComponent: React.FC<EnemyProps> = ({ word, words, currentWordIndex, x, y, type, status, isBoss }) => {
+const EnemyComponent: React.FC<EnemyProps> = ({ word, words, currentWordIndex, x, y, type, status, isBoss, isStealthed, isSplitterChild }) => {
   const typeData = ENEMY_TYPES[type] || ENEMY_TYPES['Malware'];
   const Icon = typeData.icon;
 
   const healthPercentage = isBoss ? ((words.length - currentWordIndex) / words.length) * 100 : 100;
+
+  const enemySizeClass = isBoss ? 'h-24' : isSplitterChild ? 'h-12' : 'h-16';
+  const iconSizeClass = isBoss ? 'w-12 h-12' : isSplitterChild ? 'w-6 h-6' : 'w-8 h-8';
+  const textSizeClass = isBoss ? 'text-2xl' : isSplitterChild ? 'text-base' : 'text-lg';
 
   return (
     <div
       className={cn(
         "absolute flex flex-col items-center group transition-opacity duration-300",
         status === 'dying' ? 'opacity-0' : 'opacity-100',
-        status === 'targeted' && 'opacity-70'
+        status === 'targeted' && 'opacity-70',
+        isStealthed && 'opacity-0'
       )}
       style={{
         left: `${x}px`,
@@ -35,12 +42,18 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, words, currentWordIndex, x
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <div className={cn("relative w-auto flex items-center justify-center px-4 rounded-md", isBoss ? 'h-24' : 'h-16', typeData.className)} style={{ filter: `drop-shadow(0 0 8px currentColor)`}}>
-        <Icon className={cn("mr-3 text-white", isBoss ? 'w-12 h-12' : 'w-8 h-8')} />
+      <div className={cn(
+          "relative w-auto flex items-center justify-center px-4 rounded-md", 
+          enemySizeClass,
+          typeData.className
+        )} 
+        style={{ filter: `drop-shadow(0 0 8px currentColor)`}}
+      >
+        <Icon className={cn("mr-3 text-white", iconSizeClass)} />
         <div
           className={cn(
             "font-mono font-bold tracking-widest text-white",
-            isBoss ? 'text-2xl' : 'text-lg'
+            textSizeClass
           )}
           style={{
             textShadow: `

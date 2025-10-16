@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, WORDS_LIST, BOSS_WORDS_LIST, POWER_UP_TYPES } from '@/lib/game-data';
+import { ENEMY_TYPES, WORDS_LIST, BOSS_WORDS_LIST, POWER_UP_TYPES, GLITCH_WORDS_LIST } from '@/lib/game-data';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
@@ -26,6 +26,13 @@ type Enemy = {
   vy: number;
   status: 'alive' | 'dying' | 'targeted';
   isBoss: boolean;
+  isStealthed?: boolean;
+  isSplitterChild?: boolean;
+  glitchData?: {
+    possibleWords: string[];
+    lastGlitchTime: number;
+    glitchInterval: number;
+  };
 };
 
 type Projectile = {
@@ -131,31 +138,69 @@ const initialState: GameState = {
 };
 
 const spawnEnemy = (level: number, word: string): Enemy => {
-  const enemyTypes = Object.keys(ENEMY_TYPES).filter(t => t !== 'Boss') as (keyof typeof ENEMY_TYPES)[];
-  const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-  
-  const lengthModifier = 1 - (Math.min(word.length, 15) - 4) * 0.05;
-  const baseSpeed = (0.5 + level * 0.1) * Math.max(0.5, lengthModifier);
-  
-  const startX = Math.random() * (GAME_WIDTH - 100) + 50;
-  const startY = -50;
-  
-  const angle = Math.atan2(TURRET_POSITION.y - startY, TURRET_POSITION.x - startX);
-  const speed = baseSpeed * ENEMY_TYPES[type].speed;
+    const enemyTypes = Object.keys(ENEMY_TYPES).filter(t => !['Boss', 'SplitterChild'].includes(t)) as (keyof typeof ENEMY_TYPES)[];
+    const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    
+    const lengthModifier = 1 - (Math.min(word.length, 15) - 4) * 0.05;
+    const baseSpeed = (0.5 + level * 0.1) * Math.max(0.5, lengthModifier);
+    
+    const startX = Math.random() * (GAME_WIDTH - 100) + 50;
+    const startY = -50;
+    
+    const angle = Math.atan2(TURRET_POSITION.y - startY, TURRET_POSITION.x - startX);
+    const speed = baseSpeed * ENEMY_TYPES[type].speed;
 
-  return {
-    id: enemyIdCounter++,
-    words: [word],
-    currentWordIndex: 0,
-    x: startX,
-    y: startY,
-    speed: speed,
-    type,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    status: 'alive',
-    isBoss: false
-  };
+    const enemy: Enemy = {
+      id: enemyIdCounter++,
+      words: [word],
+      currentWordIndex: 0,
+      x: startX,
+      y: startY,
+      speed: speed,
+      type,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      status: 'alive',
+      isBoss: false,
+    };
+    
+    if (type === 'Stealth') {
+      enemy.isStealthed = true;
+    }
+
+    if (type === 'Glitch') {
+        const possibleWords = [word, ...[...GLITCH_WORDS_LIST].sort(() => 0.5 - Math.random()).slice(0, 3)];
+        enemy.glitchData = {
+            possibleWords: possibleWords,
+            lastGlitchTime: Date.now(),
+            glitchInterval: 3000 + Math.random() * 2000, // 3-5 seconds
+        };
+    }
+
+    if (type === 'Splitter') {
+        // Longer word for splitter
+        enemy.words = [WORDS_LIST.find(w => w.length > 6) || 'destabilize'];
+    }
+
+    return enemy;
+};
+
+const spawnSplitterChild = (parent: Enemy): Enemy => {
+    const word = WORDS_LIST[Math.floor(Math.random() * WORDS_LIST.length)];
+    return {
+        id: enemyIdCounter++,
+        words: [word],
+        currentWordIndex: 0,
+        x: parent.x + (Math.random() - 0.5) * 50,
+        y: parent.y,
+        speed: parent.speed * 1.5,
+        type: 'SplitterChild',
+        vx: (Math.random() - 0.5) * 2,
+        vy: parent.vy * 1.2,
+        status: 'alive',
+        isBoss: false,
+        isSplitterChild: true,
+    };
 };
 
 const spawnBoss = (level: number): Enemy => {
@@ -219,12 +264,42 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       const now = Date.now();
       const isFrozen = state.activePowerUps.some(p => p.type === 'Freeze');
       
-      // Update enemy positions
-      const updatedEnemies = state.enemies.map(enemy => ({
-        ...enemy,
-        x: isFrozen ? enemy.x : enemy.x + enemy.vx,
-        y: isFrozen ? enemy.y : enemy.y + enemy.vy,
-      }));
+      const updatedEnemies = state.enemies.map(enemy => {
+        let newX = isFrozen ? enemy.x : enemy.x + enemy.vx;
+        let newY = isFrozen ? enemy.y : enemy.y + enemy.vy;
+        let newVx = enemy.vx;
+
+        if(enemy.isSplitterChild) {
+            if (newX < 50 || newX > GAME_WIDTH - 50) {
+              newVx = -enemy.vx;
+              newX = enemy.x + newVx;
+            }
+        }
+        
+        let isStealthed = enemy.isStealthed;
+        if (enemy.type === 'Stealth' && enemy.isStealthed && newY > GAME_HEIGHT / 2) {
+            isStealthed = false;
+        }
+        
+        let glitchData = enemy.glitchData;
+        let words = enemy.words;
+        if (enemy.type === 'Glitch' && enemy.glitchData && now - enemy.glitchData.lastGlitchTime > enemy.glitchData.glitchInterval) {
+            const { possibleWords } = enemy.glitchData;
+            const newWord = possibleWords[Math.floor(Math.random() * possibleWords.length)];
+            words = [newWord];
+            glitchData = { ...enemy.glitchData, lastGlitchTime: now };
+        }
+
+        return {
+            ...enemy,
+            x: newX,
+            y: newY,
+            vx: newVx,
+            isStealthed,
+            glitchData,
+            words
+        };
+      });
 
       // Update power-up positions
       let updatedPowerUps = state.powerUps.map(p => {
@@ -354,9 +429,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       };
       
       let updatedEnemies = [...state.enemies];
+      let newEnemies: Enemy[] = [];
       const enemyIndex = updatedEnemies.findIndex(e => e.id === targetId);
 
-      if (enemy.isBoss && enemy.currentWordIndex < enemy.words.length - 1) {
+      if (enemy.type === 'Splitter') {
+          newEnemies.push(spawnSplitterChild(enemy));
+          newEnemies.push(spawnSplitterChild(enemy));
+          updatedEnemies.splice(enemyIndex, 1);
+      } else if (enemy.isBoss && enemy.currentWordIndex < enemy.words.length - 1) {
           updatedEnemies[enemyIndex] = {
               ...enemy,
               currentWordIndex: enemy.currentWordIndex + 1,
@@ -370,7 +450,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         ...state,
         score: state.score + scoreGained,
         combo: newCombo,
-        enemies: updatedEnemies,
+        enemies: [...updatedEnemies, ...newEnemies],
         projectiles: state.projectiles.filter(p => p.targetId !== targetId),
         explosions: [...state.explosions, newExplosion],
         lastHitTime: Date.now(),
@@ -415,7 +495,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       if (!value) return state;
 
       const matchedEnemy = state.enemies.find(
-        (enemy) => enemy.status === 'alive' && enemy.words[enemy.currentWordIndex] === value
+        (enemy) => enemy.status === 'alive' && !enemy.isStealthed && enemy.words[enemy.currentWordIndex] === value
       );
 
       if (matchedEnemy) {
@@ -508,8 +588,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 if (nonBossEnemies.length === 0) break;
 
+                let currentCombo = newState.combo;
                 nonBossEnemies.forEach(enemy => {
-                    const scoreGained = 50; // Flat score per nuked enemy
+                    currentCombo++;
+                    const scoreGained = enemy.words[0].length * 10 * (currentCombo > 1 ? currentCombo : 1);
                     const explosion: Explosion = {
                         id: `expl-${enemy.id}-${effectIdCounter++}`,
                         x: enemy.x,
@@ -517,6 +599,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                         color: ENEMY_TYPES[enemy.type].className,
                     };
                     newState.score += scoreGained;
+                    newState.combo = currentCombo;
                     newState.explosions.push(explosion);
                 });
                 
@@ -717,7 +800,6 @@ useEffect(() => {
     // Wait 5 seconds before starting to spawn power-ups
     const initialDelay = setTimeout(() => {
         spawnerInterval = setInterval(() => {
-            // Only spawn if playing, not a boss level, and less than 2 powerups are on screen
             if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
                 dispatch({ type: 'ADD_POWERUP' });
             }
@@ -730,7 +812,7 @@ useEffect(() => {
             clearInterval(spawnerInterval);
         }
     };
-}, [status]);
+}, [status, level, powerUps.length]);
 
 
   // Effect and entity cleanup loop

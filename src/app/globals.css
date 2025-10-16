@@ -44,6 +44,9 @@
     --threat-ransomware: 0 85% 60%; /* Red */
     --threat-spyware: 260 85% 65%; /* Purple */
     --threat-adware: 45 100% 55%; /* Orange-Yellow */
+    --threat-stealth: 240 20% 75%; /* Cool Gray */
+    --threat-glitch: 300 100% 70%; /* Electric Magenta */
+    --threat-splitter: 30 100% 60%; /* Bright Orange */
   }
   .dark {
     --background: 220 31% 19%;
