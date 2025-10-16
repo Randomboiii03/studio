@@ -4,9 +4,8 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, POWER_UPS, WORDS_LIST } from '@/lib/game-data.tsx';
+import { ENEMY_TYPES, WORDS_LIST } from '@/lib/game-data.tsx';
 import { useToast } from "@/hooks/use-toast";
-import PowerUpDisplay from './PowerUpDisplay';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
@@ -36,12 +35,6 @@ type Projectile = {
 
 type Explosion = { id: string; x: number; y: number; color: string; };
 
-type ActivePowerUp = {
-  name: typeof POWER_UPS[number]['name'];
-  timeoutId: NodeJS.Timeout;
-  color: string;
-};
-
 type GameState = {
   status: 'idle' | 'playing' | 'gameOver' | 'paused';
   score: number;
@@ -51,7 +44,6 @@ type GameState = {
   enemies: Enemy[];
   projectiles: Projectile[];
   explosions: Explosion[];
-  activePowerUps: ActivePowerUp[];
   inputValue: string;
   finalScore: number | null;
   effects: {
@@ -76,8 +68,6 @@ type Action =
   | { type: 'REMOVE_PROJECTILE'; payload: { id: string } }
   | { type: 'ADD_EXPLOSION'; payload: Explosion }
   | { type: 'REMOVE_EXPLOSION'; payload: { id: string } }
-  | { type: 'ACTIVATE_POWERUP'; payload: { powerUp: typeof POWER_UPS[number], timeoutId: NodeJS.Timeout } }
-  | { type: 'DEACTIVATE_POWERUP'; payload: { name: string } }
   | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
   | { type: 'SET_LIVES'; payload: number }
   | { type: 'TRIGGER_SHAKE' }
@@ -100,7 +90,6 @@ const initialState: GameState = {
   enemies: [],
   projectiles: [],
   explosions: [],
-  activePowerUps: [],
   inputValue: '',
   finalScore: null,
   effects: {
@@ -113,7 +102,6 @@ const initialState: GameState = {
 };
 
 let enemyIdCounter = 0;
-let effectIdCounter = 0;
 
 
 const gameReducer = (state: GameState, action: Action): GameState => {
@@ -124,11 +112,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         status: 'playing',
       };
     case 'RESET_GAME':
-      state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
       return { ...initialState, status: 'playing' };
 
     case 'EXIT_GAME':
-        state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
         return { ...initialState };
 
     case 'PAUSE_GAME':
@@ -236,25 +222,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       
     case 'REMOVE_EXPLOSION':
       return { ...state, explosions: state.explosions.filter(e => e.id !== action.payload.id) };
-
-    case 'ACTIVATE_POWERUP': {
-      const { powerUp, timeoutId } = action.payload;
-      
-      const existingPowerup = state.activePowerUps.find(p => p.name === powerUp.name);
-      if (existingPowerup) {
-        clearTimeout(existingPowerup.timeoutId);
-      }
-      
-      const otherPowerups = state.activePowerUps.filter(p => p.name !== powerUp.name);
-
-      return { ...state, activePowerUps: [...otherPowerups, { ...powerUp, timeoutId } ] };
-    }
-    case 'DEACTIVATE_POWERUP': {
-      const { name } = action.payload;
-      const powerUp = state.activePowerUps.find(p => p.name === name);
-      if (powerUp) clearTimeout(powerUp.timeoutId);
-      return { ...state, activePowerUps: state.activePowerUps.filter(p => p.name !== name) };
-    }
     
     case 'SET_EFFECTS':
         return { ...state, effects: { ...state.effects, ...action.payload } };
@@ -290,7 +257,6 @@ export function CyberTypeDefense() {
   const enemySpawnTimerRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
   
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
 
@@ -333,67 +299,6 @@ export function CyberTypeDefense() {
     }, 200); // projectile travel time
   }, []);
   
-  
-  const activatePowerUp = useCallback((powerUp: typeof POWER_UPS[number]) => {
-    toast({
-        title: `Power-Up Activated: ${powerUp.name}`,
-        description: powerUp.effect,
-    });
-    
-    let isInstant = powerUp.duration === 0;
-
-    switch(powerUp.name) {
-      case 'Frenzy':
-      case 'Nuke':
-        // Important: Create a copy of the enemies array to iterate over
-        [...state.enemies].forEach(enemy => {
-            if(enemy.status === 'alive') {
-                destroyEnemy(enemy);
-            }
-        });
-        break;
-      case 'Freeze':
-        dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: true } });
-        break;
-      case 'Shield':
-        dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } });
-        break;
-      case 'Slowdown':
-        dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: true } });
-        break;
-      case 'Overclock':
-        dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 2 } });
-        break;
-      case 'Heal':
-        dispatch({ type: 'SET_LIVES', payload: state.lives + 3 });
-        break;
-      case 'King':
-        dispatch({ type: 'SET_EFFECTS', payload: { isShielded: true } });
-        break;
-    }
-    
-    if (!isInstant) {
-      const timeoutId = setTimeout(() => {
-          dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
-          switch(powerUp.name) {
-              case 'Freeze': dispatch({ type: 'SET_EFFECTS', payload: { isFrozen: false } }); break;
-              case 'Shield': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
-              case 'Slowdown': dispatch({ type: 'SET_EFFECTS', payload: { isSlowed: false } }); break;
-              case 'Overclock': dispatch({ type: 'SET_EFFECTS', payload: { scoreMultiplier: 1 } }); break;
-              case 'King': dispatch({ type: 'SET_EFFECTS', payload: { isShielded: false } }); break;
-          }
-      }, powerUp.duration);
-      dispatch({ type: 'ACTIVATE_POWERUP', payload: { powerUp, timeoutId } });
-    } else {
-       // For instant powerups, we add and remove it quickly to show it in the UI
-      const timeoutId = setTimeout(() => {
-        dispatch({ type: 'DEACTIVATE_POWERUP', payload: { name: powerUp.name } });
-      }, 500);
-      dispatch({ type: 'ACTIVATE_POWERUP', payload: { powerUp, timeoutId } });
-    }
-
-  }, [state.enemies, state.lives, toast, destroyEnemy]);
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (state.status !== 'playing') return;
     dispatch({ type: 'INPUT_CHANGE', value: e.target.value.toLowerCase() });
@@ -404,14 +309,9 @@ export function CyberTypeDefense() {
       const value = state.inputValue.trim();
       if (!value) return;
 
-      const powerUp = POWER_UPS.find(p => p.keywords.includes(value));
-      if (powerUp) {
-        activatePowerUp(powerUp);
-      } else {
-          const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
-          if (matchedEnemy) {
-            destroyEnemy(matchedEnemy);
-          }
+      const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
+      if (matchedEnemy) {
+        destroyEnemy(matchedEnemy);
       }
       
       dispatch({ type: 'INPUT_CHANGE', value: '' });
@@ -476,7 +376,6 @@ export function CyberTypeDefense() {
       inputRef.current?.focus();
       lastTimeRef.current = undefined;
       enemyIdCounter = 0;
-      effectIdCounter = 0;
       enemySpawnTimerRef.current = 0;
       gameLoopRef.current = requestAnimationFrame(gameLoop);
     } else if (state.status !== 'playing' && gameLoopRef.current) {
@@ -498,10 +397,9 @@ export function CyberTypeDefense() {
         cancelAnimationFrame(gameLoopRef.current);
         gameLoopRef.current = undefined;
       }
-      state.activePowerUps.forEach(p => clearTimeout(p.timeoutId));
       if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
     };
-  }, [state.status, gameLoop, state.activePowerUps]);
+  }, [state.status, gameLoop]);
 
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
@@ -527,8 +425,6 @@ export function CyberTypeDefense() {
             <Button variant="ghost" size="icon" className="absolute top-4 right-16 z-20 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
                 <Pause />
             </Button>
-            
-            <PowerUpDisplay activePowerUps={state.activePowerUps} />
             
             {state.enemies.map(enemy => (
               <EnemyComponent key={enemy.id} {...enemy} />
@@ -576,7 +472,7 @@ export function CyberTypeDefense() {
               CyberType Defense
             </h1>
             <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
-              Type the words to destroy falling cyber threats. Activate powerful abilities by typing special keywords. How long can you survive?
+              Type the words to destroy falling cyber threats. How long can you survive?
             </p>
             <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50 mt-4">
               Start Defense Protocol
@@ -602,5 +498,3 @@ export function CyberTypeDefense() {
     </div>
   );
 }
-
-    
