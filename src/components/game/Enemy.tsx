@@ -28,18 +28,21 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, words, currentWordIndex, x
   const iconSizeClass = isBoss ? 'w-12 h-12' : isSplitterChild ? 'w-6 h-6' : 'w-8 h-8';
   const textSizeClass = isBoss ? 'text-2xl' : isSplitterChild ? 'text-base' : 'text-lg';
 
+  const flickerAnimation = isStealthed ? { animation: 'stealth-flicker 1.5s infinite' } : {};
+
   return (
     <div
       className={cn(
         "absolute flex flex-col items-center group transition-opacity duration-300",
         status === 'dying' ? 'opacity-0' : 'opacity-100',
         status === 'targeted' && 'opacity-70',
-        isStealthed && 'opacity-0'
+        isStealthed && 'opacity-50'
       )}
       style={{
         left: `${x}px`,
         top: `${y}px`,
         transform: 'translate(-50%, -50%)',
+        ...flickerAnimation
       }}
     >
       <div className={cn(
@@ -75,3 +78,5 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, words, currentWordIndex, x
 };
 
 export default React.memo(EnemyComponent);
+
+    

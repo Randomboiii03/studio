@@ -209,7 +209,7 @@ const spawnSplitterChild = (parent: Enemy): Enemy => {
         words: [word],
         currentWordIndex: 0,
         x: parent.x + (Math.random() - 0.5) * 50,
-        y: parent.y,
+        y: parent.y - 20, // Push back slightly
         speed: parent.speed * 1.5,
         type: 'SplitterChild',
         vx: (Math.random() - 0.5) * 2,
@@ -322,8 +322,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
       // Update power-up positions
       let updatedPowerUps = state.powerUps.map(p => {
-          let newX = p.x + p.vx;
-          let newY = p.y + p.vy;
+          let newX = isFrozen ? p.x : p.x + p.vx;
+          let newY = isFrozen ? p.y : p.y + p.vy;
           let newVx = p.vx;
           let newVy = p.vy;
 
@@ -848,7 +848,7 @@ useEffect(() => {
         clearInterval(spawnerInterval);
         clearTimeout(initialTimeout);
     };
-}, [status, level]);
+}, [status]);
 
 // Level Announcements
 useEffect(() => {
@@ -1020,3 +1020,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
