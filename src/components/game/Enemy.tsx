@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { ENEMY_TYPES } from '@/lib/game-data.tsx';
+import { ENEMY_TYPES } from '@/lib/game-data';
 
 interface EnemyProps {
   word: string;
@@ -31,7 +31,7 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type, status }) => {
       }}
     >
       <div className={cn("relative w-auto h-16 flex items-center justify-center px-4 rounded-md", typeData.className)} style={{ filter: `drop-shadow(0 0 8px currentColor)`}}>
-        <Icon className="w-8 h-8 mr-3" />
+        <Icon className="w-8 h-8 mr-3 text-white" />
         <div
           className={cn(
             "font-mono font-bold tracking-widest text-lg text-white"
@@ -40,7 +40,7 @@ const EnemyComponent: React.FC<EnemyProps> = ({ word, x, y, type, status }) => {
             textShadow: `
               0 0 2px #000, 
               0 0 5px #000, 
-              0 0 10px currentColor`
+              0 0 10px #000`
           }}
         >
           {word}

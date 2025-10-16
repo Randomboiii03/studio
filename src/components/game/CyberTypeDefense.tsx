@@ -228,7 +228,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           return state;
       }
       
-      const scoreGained = enemy.word.length * 10 * (state.combo + 1);
+      const scoreGained = enemy.word.length * 10 * (state.combo > 0 ? state.combo : 1);
       const explosionId = `expl-${targetId}-${effectIdCounter++}`;
       const typeData = ENEMY_TYPES[enemy.type];
       const newExplosion: Explosion = {
@@ -429,7 +429,7 @@ export function CyberTypeDefense() {
               CyberType Defense
             </h1>
             <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
-              Type the cybersecurity commands to neutralize falling threats. Defend the system!
+              Type the commands to neutralize falling threats. Defend the system!
             </p>
             <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50 mt-4">
               Start Defense Protocol
