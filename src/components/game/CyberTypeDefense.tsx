@@ -44,31 +44,22 @@ type GameState = {
   projectiles: Projectile[];
   explosions: Explosion[];
   inputValue: string;
-  finalScore: number | null;
-  effects: {
-    isFrozen: boolean;
-    isShielded: boolean;
-    isSlowed: boolean;
-    scoreMultiplier: number;
-  };
   isShaking: boolean;
 };
 
 type Action =
   | { type: 'START_GAME' }
-  | { type: 'GAME_TICK'; delta: number }
-  | { type: 'INPUT_CHANGE'; value: string }
+  | { type: 'GAME_TICK' }
+  | { type: 'INPUT_CHANGE'; payload: string }
   | { type: 'RESET_GAME' }
   | { type: 'EXIT_GAME' }
-  | { type: 'ADD_ENEMY'; payload: Enemy }
-  | { type: 'ENEMY_HIT'; payload: { enemyId: number } }
-  | { type: 'DESTROY_ENEMY'; payload: { enemyId: number } }
-  | { type: 'ADD_PROJECTILE'; payload: Projectile }
-  | { type: 'REMOVE_PROJECTILE'; payload: { id: string } }
-  | { type: 'ADD_EXPLOSION'; payload: Explosion }
-  | { type: 'REMOVE_EXPLOSION'; payload: { id: string } }
-  | { type: 'SET_EFFECTS'; payload: Partial<GameState['effects']> }
-  | { type: 'SET_LIVES'; payload: number }
+  | { type: 'SPAWN_ENEMY' }
+  | { type: 'ENEMY_DESTROYED'; payload: { enemy: Enemy } }
+  | { type: 'ENEMY_REACHED_END'; payload: { enemyId: number } }
+  | { type: 'CREATE_PROJECTILE'; payload: { enemy: Enemy } }
+  | { type: 'UPDATE_PROJECTILES' }
+  | { type: 'CREATE_EXPLOSION'; payload: { enemy: Enemy } }
+  | { type: 'CLEANUP_EFFECTS' }
   | { type: 'TRIGGER_SHAKE' }
   | { type: 'STOP_SHAKE' }
   | { type: 'PAUSE_GAME' }
@@ -78,7 +69,7 @@ const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 600;
 const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
-
+let enemyIdCounter = 0;
 
 const initialState: GameState = {
   status: 'idle',
@@ -90,242 +81,36 @@ const initialState: GameState = {
   projectiles: [],
   explosions: [],
   inputValue: '',
-  finalScore: null,
-  effects: {
-    isFrozen: false,
-    isShielded: false,
-    isSlowed: false,
-    scoreMultiplier: 1,
-  },
   isShaking: false,
 };
-
-let enemyIdCounter = 0;
-
 
 const gameReducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
     case 'START_GAME':
+      enemyIdCounter = 0;
       return {
         ...initialState,
         status: 'playing',
       };
     case 'RESET_GAME':
+      enemyIdCounter = 0;
       return { ...initialState, status: 'playing' };
 
     case 'EXIT_GAME':
         return { ...initialState };
 
     case 'PAUSE_GAME':
-      if (state.status === 'playing') {
-        return { ...state, status: 'paused' };
-      }
-      return state;
+      return state.status === 'playing' ? { ...state, status: 'paused' } : state;
 
     case 'RESUME_GAME':
-      if (state.status === 'paused') {
-        return { ...state, status: 'playing' };
-      }
-      return state;
+      return state.status === 'paused' ? { ...state, status: 'playing' } : state;
 
     case 'INPUT_CHANGE':
-      return { ...state, inputValue: action.value };
+      return { ...state, inputValue: action.payload };
 
-    case 'ADD_ENEMY':
-      return { ...state, enemies: [...state.enemies, action.payload] };
-    
-    case 'ENEMY_HIT': {
-      const enemy = state.enemies.find(e => e.id === action.payload.enemyId);
-      if (!enemy || enemy.status !== 'alive') return state;
+    case 'SPAWN_ENEMY': {
+      if (state.enemies.length > 15 + state.level) return state;
 
-      const scoreGained = enemy.word.length * 10 * state.combo * state.effects.scoreMultiplier;
-      return {
-        ...state,
-        score: state.score + scoreGained,
-        combo: state.combo + 1,
-        enemies: state.enemies.map(e =>
-          e.id === action.payload.enemyId ? { ...e, status: 'dying' } : e
-        ),
-      };
-    }
-    
-    case 'DESTROY_ENEMY': {
-      return {
-        ...state,
-        enemies: state.enemies.filter(e => e.id !== action.payload.enemyId),
-      };
-    }
-    
-    case 'ADD_PROJECTILE':
-      return { ...state, projectiles: [...state.projectiles, action.payload] };
-      
-    case 'REMOVE_PROJECTILE':
-      return { ...state, projectiles: state.projectiles.filter(p => p.id !== action.payload.id) };
-
-    case 'GAME_TICK': {
-      if (state.status !== 'playing') return state;
-
-      let newEnemies = [...state.enemies];
-      let newLives = state.lives;
-      let newCombo = state.combo;
-      let gameOver = false;
-      let triggerShake = false;
-
-      const speedModifier = state.effects.isSlowed ? 0.5 : 1;
-      
-      newEnemies = state.effects.isFrozen ? newEnemies : newEnemies.map(enemy => ({
-        ...enemy,
-        x: enemy.x + enemy.vx * action.delta * 60 * speedModifier,
-        y: enemy.y + enemy.vy * action.delta * 60 * speedModifier,
-      })).filter(enemy => {
-        if (enemy.y >= GAME_HEIGHT) {
-          if (enemy.status === 'alive') {
-            if (!state.effects.isShielded) {
-              newLives -= 1;
-              triggerShake = true;
-            }
-            newCombo = 1;
-          }
-          if (newLives <= 0) gameOver = true;
-          return false;
-        }
-        return true;
-      });
-      
-      let newState: GameState = { ...state, enemies: newEnemies, lives: newLives, combo: newCombo };
-
-      if (triggerShake) {
-        newState.isShaking = true;
-      }
-
-      if (gameOver) {
-        return { ...state, status: 'gameOver', finalScore: state.score, lives: 0, enemies: [], projectiles: [], isShaking: false };
-      }
-      
-      const newProjectiles = state.projectiles.map(p => {
-        const dx = p.targetX - p.x;
-        const dy = p.targetY - p.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 25) return null;
-        const moveX = (dx / dist) * 25; // Projectile speed
-        const moveY = (dy / dist) * 25;
-        return {...p, x: p.x + moveX, y: p.y + moveY};
-      }).filter(Boolean) as Projectile[];
-
-
-      const newLevel = Math.floor(state.score / 1000) + 1;
-
-      return { ...newState, projectiles: newProjectiles, level: newLevel };
-    }
-    
-    case 'ADD_EXPLOSION':
-      return { ...state, explosions: [...state.explosions, action.payload] };
-      
-    case 'REMOVE_EXPLOSION':
-      return { ...state, explosions: state.explosions.filter(e => e.id !== action.payload.id) };
-    
-    case 'SET_EFFECTS':
-        return { ...state, effects: { ...state.effects, ...action.payload } };
-
-    case 'SET_LIVES':
-        return { ...state, lives: Math.min(INITIAL_LIVES, action.payload) };
-    
-    case 'TRIGGER_SHAKE':
-      return {...state, isShaking: true};
-      
-    case 'STOP_SHAKE':
-      return {...state, isShaking: false};
-
-    default:
-      return state;
-  }
-};
-
-const StatItem = ({ icon: Icon, value, label, className }: { icon: React.ElementType, value: string | number, label: string, className?: string }) => (
-  <div className={cn("flex items-center gap-2 font-mono text-lg", className)}>
-      <Icon className="w-5 h-5" />
-      <div className="flex items-baseline gap-1.5">
-          <span className="font-bold text-2xl tracking-tighter">{value}</span>
-          <span className="text-sm text-muted-foreground">{label}</span>
-      </div>
-  </div>
-);
-
-export function CyberTypeDefense() {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
-  const gameLoopRef = useRef<number>();
-  const lastTimeRef = useRef<number>();
-  const enemySpawnTimerRef = useRef(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const gameAreaRef = useRef<HTMLDivElement>(null);
-  
-  const shakeTimeoutRef = useRef<NodeJS.Timeout>();
-
-  useEffect(() => {
-    if (state.isShaking) {
-      if(shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
-      
-      if(gameAreaRef.current) {
-        gameAreaRef.current.classList.remove('animate-screen-shake');
-        void gameAreaRef.current.offsetWidth; // trigger reflow
-        gameAreaRef.current.classList.add('animate-screen-shake');
-      }
-
-      shakeTimeoutRef.current = setTimeout(() => {
-        dispatch({ type: 'STOP_SHAKE' });
-      }, 400);
-    }
-  }, [state.isShaking]);
-
-
-  const destroyEnemy = useCallback((enemy: Enemy) => {
-    if (!enemy || enemy.status !== 'alive') return;
-
-    dispatch({ type: 'ENEMY_HIT', payload: { enemyId: enemy.id } });
-
-    const projectileId = `proj-${enemy.id}-${Date.now()}`;
-    dispatch({ type: 'ADD_PROJECTILE', payload: { id: projectileId, x: TURRET_POSITION.x, y: TURRET_POSITION.y, targetX: enemy.x, targetY: enemy.y } });
-    
-    setTimeout(() => {
-      dispatch({ type: 'REMOVE_PROJECTILE', payload: { id: projectileId } });
-      const explosionId = `expl-${enemy.id}-${Date.now()}`;
-      const typeData = ENEMY_TYPES[enemy.type];
-      dispatch({ type: 'ADD_EXPLOSION', payload: { id: explosionId, x: enemy.x, y: enemy.y, color: typeData.className } });
-      
-      setTimeout(() => dispatch({ type: 'REMOVE_EXPLOSION', payload: { id: explosionId } }), 500);
-
-      setTimeout(() => {
-        dispatch({ type: 'DESTROY_ENEMY', payload: { enemyId: enemy.id } });
-      }, 300);
-    }, 200); // projectile travel time
-  }, []);
-  
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (state.status !== 'playing') return;
-    dispatch({ type: 'INPUT_CHANGE', value: e.target.value.toLowerCase() });
-  };
-  
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && state.status === 'playing') {
-      const value = state.inputValue.trim();
-      if (!value) return;
-
-      const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
-      if (matchedEnemy) {
-        destroyEnemy(matchedEnemy);
-      }
-      
-      dispatch({ type: 'INPUT_CHANGE', value: '' });
-    }
-  };
-
-  const spawnEnemy = useCallback(() => {
-    if (state.status !== 'playing' || state.enemies.length > 15 + state.level) return;
-
-    const spawnInterval = Math.max(200, 3000 - state.level * 100);
-    if (enemySpawnTimerRef.current > spawnInterval) {
-      enemySpawnTimerRef.current = 0;
-      
       const word = WORDS_LIST[Math.floor(Math.random() * WORDS_LIST.length)];
       const enemyTypes = Object.keys(ENEMY_TYPES) as (keyof typeof ENEMY_TYPES)[];
       const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
@@ -349,70 +134,237 @@ export function CyberTypeDefense() {
         status: 'alive'
       };
 
-      dispatch({ type: 'ADD_ENEMY', payload: newEnemy });
-    }
-  }, [state.level, state.enemies.length, state.status]);
-
-  const gameLoop = useCallback((time: number) => {
-    if (!lastTimeRef.current) {
-      lastTimeRef.current = time;
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
-      return;
-    }
-
-    if (state.status === 'playing') {
-      const delta = (time - lastTimeRef.current) / 1000;
-      enemySpawnTimerRef.current += delta * 1000;
-
-      spawnEnemy();
-      dispatch({ type: 'GAME_TICK', delta });
+      return { ...state, enemies: [...state.enemies, newEnemy] };
     }
     
-    lastTimeRef.current = time;
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
-  }, [spawnEnemy, state.status]);
+    case 'ENEMY_DESTROYED': {
+      const { enemy } = action.payload;
+      const scoreGained = enemy.word.length * 10 * state.combo;
+
+      return {
+        ...state,
+        score: state.score + scoreGained,
+        combo: state.combo + 1,
+        enemies: state.enemies.map(e =>
+          e.id === enemy.id ? { ...e, status: 'dying' } : e
+        ),
+        inputValue: '',
+      };
+    }
+    
+    case 'ENEMY_REACHED_END': {
+        const newLives = state.lives - 1;
+        if (newLives <= 0) {
+            return { ...state, status: 'gameOver', lives: 0, enemies: [], projectiles: [] };
+        }
+        return {
+            ...state,
+            lives: newLives,
+            combo: 1,
+            enemies: state.enemies.filter(e => e.id !== action.payload.enemyId),
+            isShaking: true,
+        };
+    }
+
+    case 'GAME_TICK': {
+      if (state.status !== 'playing') return state;
+
+      const newEnemies = state.enemies.map(enemy => ({
+        ...enemy,
+        x: enemy.x + enemy.vx,
+        y: enemy.y + enemy.vy,
+      }));
+
+      const newLevel = Math.floor(state.score / 1000) + 1;
+      return { ...state, enemies: newEnemies, level: newLevel };
+    }
+    
+    case 'CREATE_PROJECTILE': {
+        const { enemy } = action.payload;
+        const projectileId = `proj-${enemy.id}-${Date.now()}`;
+        const newProjectile: Projectile = {
+            id: projectileId,
+            x: TURRET_POSITION.x,
+            y: TURRET_POSITION.y,
+            targetX: enemy.x,
+            targetY: enemy.y
+        };
+        return { ...state, projectiles: [...state.projectiles, newProjectile] };
+    }
+
+    case 'UPDATE_PROJECTILES': {
+        const newProjectiles = state.projectiles.map(p => {
+            const dx = p.targetX - p.x;
+            const dy = p.targetY - p.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 25) return null; // Remove if close to target
+            const moveX = (dx / dist) * 25; // Projectile speed
+            const moveY = (dy / dist) * 25;
+            return {...p, x: p.x + moveX, y: p.y + moveY};
+        }).filter(Boolean) as Projectile[];
+        return { ...state, projectiles: newProjectiles };
+    }
+
+    case 'CREATE_EXPLOSION': {
+        const { enemy } = action.payload;
+        const explosionId = `expl-${enemy.id}-${Date.now()}`;
+        const typeData = ENEMY_TYPES[enemy.type];
+        const newExplosion: Explosion = {
+            id: explosionId,
+            x: enemy.x,
+            y: enemy.y,
+            color: typeData.className
+        };
+        return { ...state, explosions: [...state.explosions, newExplosion] };
+    }
+    
+    case 'CLEANUP_EFFECTS': {
+        return {
+            ...state,
+            enemies: state.enemies.filter(e => e.status !== 'dying'),
+            explosions: [], // Explosions are short-lived
+        };
+    }
+
+    case 'TRIGGER_SHAKE':
+      return {...state, isShaking: true};
+      
+    case 'STOP_SHAKE':
+      return {...state, isShaking: false};
+
+    default:
+      return state;
+  }
+};
+
+const StatItem = ({ icon: Icon, value, label, className }: { icon: React.ElementType, value: string | number, label: string, className?: string }) => (
+  <div className={cn("flex items-center gap-2 font-mono text-lg", className)}>
+      <Icon className="w-5 h-5" />
+      <div className="flex items-baseline gap-1.5">
+          <span className="font-bold text-2xl tracking-tighter">{value}</span>
+          <span className="text-sm text-muted-foreground">{label}</span>
+      </div>
+  </div>
+);
+
+export function CyberTypeDefense() {
+  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const gameAreaRef = useRef<HTMLDivElement>(null);
+  const shakeTimeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    if (state.status === 'playing' && !gameLoopRef.current) {
-      inputRef.current?.focus();
-      lastTimeRef.current = undefined;
-      enemyIdCounter = 0;
-      enemySpawnTimerRef.current = 0;
-      gameLoopRef.current = requestAnimationFrame(gameLoop);
-    } else if (state.status !== 'playing' && gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
-        gameLoopRef.current = undefined;
-    }
+    if (state.isShaking) {
+      if(shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+      
+      if(gameAreaRef.current) {
+        gameAreaRef.current.classList.remove('animate-screen-shake');
+        void gameAreaRef.current.offsetWidth; // trigger reflow
+        gameAreaRef.current.classList.add('animate-screen-shake');
+      }
 
-    if (state.status === 'paused' || state.status === 'gameOver') {
-        inputRef.current?.blur();
+      shakeTimeoutRef.current = setTimeout(() => {
+        dispatch({ type: 'STOP_SHAKE' });
+      }, 400);
     }
-    
+     return () => {
+      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
+    };
+  }, [state.isShaking]);
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (state.status !== 'playing') return;
+    dispatch({ type: 'INPUT_CHANGE', payload: e.target.value.toLowerCase() });
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && state.status === 'playing') {
+      const value = state.inputValue.trim();
+      if (!value) return;
+
+      const matchedEnemy = state.enemies.find(enemy => enemy.word === value && enemy.status === 'alive');
+      if (matchedEnemy) {
+        dispatch({ type: 'ENEMY_DESTROYED', payload: { enemy: matchedEnemy } });
+        dispatch({ type: 'CREATE_PROJECTILE', payload: { enemy: matchedEnemy } });
+        
+        setTimeout(() => {
+            dispatch({ type: 'CREATE_EXPLOSION', payload: { enemy: matchedEnemy } });
+        }, 200); // Projectile travel time
+      } else {
+        dispatch({ type: 'INPUT_CHANGE', payload: '' });
+      }
+    }
+  };
+
+  // Main Game Loop
+  useEffect(() => {
+    if (state.status !== 'playing') return;
+
+    const gameLoop = setInterval(() => {
+      dispatch({ type: 'GAME_TICK' });
+      dispatch({ type: 'UPDATE_PROJECTILES' });
+
+      state.enemies.forEach(enemy => {
+        if (enemy.y >= GAME_HEIGHT && enemy.status === 'alive') {
+          dispatch({ type: 'ENEMY_REACHED_END', payload: { enemyId: enemy.id } });
+        }
+      });
+      
+    }, 1000 / 60);
+
+    return () => clearInterval(gameLoop);
+  }, [state.status, state.enemies]);
+
+  // Enemy Spawner
+  useEffect(() => {
+      if (state.status !== 'playing') return;
+      const spawnInterval = Math.max(500, 3000 - state.level * 100);
+      const spawner = setInterval(() => {
+          dispatch({ type: 'SPAWN_ENEMY' });
+      }, spawnInterval);
+
+      return () => clearInterval(spawner);
+  }, [state.status, state.level]);
+
+  // Effect and entity cleanup loop
+  useEffect(() => {
+    if (state.status !== 'playing') return;
+    const cleanupLoop = setInterval(() => {
+        dispatch({type: 'CLEANUP_EFFECTS'});
+    }, 500);
+    return () => clearInterval(cleanupLoop);
+  }, [state.status]);
+
+  useEffect(() => {
     if (state.status === 'playing') {
         inputRef.current?.focus();
     }
+  }, [state.status]);
 
-
-    return () => {
-      if (gameLoopRef.current) {
-        cancelAnimationFrame(gameLoopRef.current);
-        gameLoopRef.current = undefined;
-      }
-      if (shakeTimeoutRef.current) clearTimeout(shakeTimeoutRef.current);
-    };
-  }, [state.status, gameLoop]);
 
   return (
     <div className="w-full h-screen flex flex-col items-center justify-center gap-4">
       <div 
         ref={gameAreaRef}
         className={cn(
-          "relative w-full max-w-5xl aspect-[10/6] bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
+          "relative bg-black/40 rounded-lg border-2 border-primary/50 shadow-[0_0_20px] shadow-primary/20 overflow-hidden",
           state.isShaking && "border-destructive shadow-[0_0_30px] shadow-destructive"
         )}
         style={{ width: `${GAME_WIDTH}px`, height: `${GAME_HEIGHT}px` }}
       >
-        {state.status === 'playing' || state.status === 'gameOver' || state.status === 'paused' ? (
+        {state.status === 'idle' ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-8 text-center">
+            <h1 className="font-headline text-5xl md:text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-neutral-50 to-neutral-400 py-2">
+              CyberType Defense
+            </h1>
+            <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
+              Type the words to destroy falling cyber threats. How long can you survive?
+            </p>
+            <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50 mt-4">
+              Start Defense Protocol
+            </Button>
+          </div>
+        ) : (
           <>
             <div className="absolute top-4 left-4 flex flex-col gap-2 text-primary p-2 rounded-lg bg-black/30 border border-primary/20 backdrop-blur-sm z-10">
                 <div className="flex items-center gap-4">
@@ -467,23 +419,11 @@ export function CyberTypeDefense() {
               />
             </div>
           </>
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-8 text-center">
-            <h1 className="font-headline text-5xl md:text-6xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-neutral-50 to-neutral-400 py-2">
-              CyberType Defense
-            </h1>
-            <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
-              Type the words to destroy falling cyber threats. How long can you survive?
-            </p>
-            <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50 mt-4">
-              Start Defense Protocol
-            </Button>
-          </div>
         )}
 
         {state.status === 'gameOver' && (
           <GameOverModal 
-            score={state.finalScore || 0}
+            score={state.score}
             onRestart={() => dispatch({ type: 'RESET_GAME' })}
           />
         )}
