@@ -38,20 +38,18 @@
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
-    --threat-malware: 139 40% 60%;
-    --threat-phishing: 48 96% 70%;
-    --threat-ddos: 28 96% 70%;
-    --threat-ransomware: 0 80% 70%;
-    --threat-spyware: 268 80% 70%;
-    --threat-adware: 198 80% 70%;
+    --threat-malware: 139 70% 55%; /* Brighter Green */
+    --threat-phishing: 200 90% 60%; /* Cyan-Blue */
+    --threat-ddos: 340 95% 65%; /* Hot Pink */
+    --threat-ransomware: 0 85% 60%; /* Red */
+    --threat-spyware: 260 85% 65%; /* Purple */
+    --threat-adware: 45 100% 55%; /* Orange-Yellow */
   }
   .dark {
     --background: 220 31% 19%;
     --foreground: 210 40% 98%;
     --card: 220 31% 15%;
     --card-foreground: 210 40% 98%;
-    --popover: 220 31% 15%;
-    --popover-foreground: 210 40% 98%;
     --primary: 198 100% 63%;
     --primary-foreground: 222 47% 11%;
     --secondary: 217 33% 25%;

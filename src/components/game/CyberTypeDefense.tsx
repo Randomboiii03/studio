@@ -70,7 +70,7 @@ const INITIAL_LIVES = 10;
 const GAME_WIDTH = 1000;
 const GAME_HEIGHT = 600;
 const TURRET_POSITION = { x: GAME_WIDTH / 2, y: GAME_HEIGHT - 30 };
-const TURRET_HITBOX_Y = GAME_HEIGHT - 60;
+const TURRET_HITBOX_Y = GAME_HEIGHT - 80; // Adjusted for better collision feel
 let enemyIdCounter = 0;
 let effectIdCounter = 0;
 
@@ -91,7 +91,10 @@ const spawnEnemy = (level: number): Enemy => {
   const word = WORDS_LIST[Math.floor(Math.random() * WORDS_LIST.length)];
   const enemyTypes = Object.keys(ENEMY_TYPES) as (keyof typeof ENEMY_TYPES)[];
   const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-  const baseSpeed = 0.5 + level * 0.1;
+  
+  // Base speed decreases for longer words
+  const lengthModifier = 1 - (Math.min(word.length, 15) - 4) * 0.05; // -5% speed per char over 4
+  const baseSpeed = (0.5 + level * 0.1) * Math.max(0.5, lengthModifier);
   
   const startX = Math.random() * (GAME_WIDTH - 100) + 50;
   const startY = -50;
@@ -225,7 +228,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           return state;
       }
       
-      const scoreGained = enemy.word.length * 10 * (state.combo || 1);
+      const scoreGained = enemy.word.length * 10 * (state.combo + 1);
       const explosionId = `expl-${targetId}-${effectIdCounter++}`;
       const typeData = ENEMY_TYPES[enemy.type];
       const newExplosion: Explosion = {
@@ -234,14 +237,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           y: enemy.y,
           color: typeData.className
       };
+      
+      const updatedEnemies = state.enemies.map(e => e.id === targetId ? { ...e, status: 'dying' } : e);
 
       return {
         ...state,
         score: state.score + scoreGained,
         combo: state.combo + 1,
-        enemies: state.enemies.map(e =>
-          e.id === targetId ? { ...e, status: 'dying' } : e
-        ),
+        enemies: updatedEnemies,
         projectiles: state.projectiles.filter(p => p.targetId !== targetId),
         explosions: [...state.explosions, newExplosion],
       };
@@ -317,7 +320,6 @@ export function CyberTypeDefense() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
-  const lastSpawnTimeRef = useRef(0);
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
 
   const { status, score, lives, combo, level, enemies, projectiles, explosions, inputValue, isShaking } = state;
@@ -378,16 +380,19 @@ export function CyberTypeDefense() {
 
   // Enemy Spawner
   useEffect(() => {
-    if (status !== 'playing' || enemies.length > 0) return;
-
-    // Spawn initial wave for the level
-    const waveSize = Math.min(5 + level * 2, 20); // e.g. level 1 has 7, grows to max of 20
-    for(let i = 0; i < waveSize; i++) {
-        setTimeout(() => {
-            if(status === 'playing') {
-                dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level) });
-            }
-        }, i * (2000 / level)); // Stagger spawns
+    if (status !== 'playing') return;
+    
+    // Check if all enemies are gone to trigger next level
+    if (enemies.length === 0) {
+        // Spawn initial wave for the level
+        const waveSize = Math.min(5 + level, 20); // e.g. level 1 has 6, grows to max of 20
+        for(let i = 0; i < waveSize; i++) {
+            setTimeout(() => {
+                if(status === 'playing') {
+                    dispatch({ type: 'ADD_ENEMY', payload: spawnEnemy(level) });
+                }
+            }, i * (2000 / (level * 0.5 + 1))); // Stagger spawns, faster with levels
+        }
     }
 }, [status, level, enemies.length]);
 
@@ -424,7 +429,7 @@ export function CyberTypeDefense() {
               CyberType Defense
             </h1>
             <p className="text-sm md:text-base text-muted-foreground max-w-2xl">
-              Type the words to destroy falling cyber threats. How long can you survive?
+              Type the cybersecurity commands to neutralize falling threats. Defend the system!
             </p>
             <Button size="lg" onClick={() => dispatch({ type: 'START_GAME' })} className="shadow-[0_0_20px] shadow-primary/50 mt-4">
               Start Defense Protocol
@@ -445,9 +450,9 @@ export function CyberTypeDefense() {
             ))}
 
             {explosions.map(explosion => (
-              <div key={explosion.id} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
+              <div key={`${explosion.id}-${Math.random()}`} className="absolute" style={{ left: explosion.x, top: explosion.y }}>
                 {[...Array(5)].map((_, i) => (
-                  <div key={`${explosion.id}-${i}`} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
+                  <div key={`${explosion.id}-${i}-${Math.random()}`} className={cn("absolute rounded-full animate-fade-dots", explosion.color.replace('text-','bg-'))} style={{ 
                       width: `${Math.random() * 6 + 2}px`,
                       height: `${Math.random() * 6 + 2}px`,
                       transform: `translate(${Math.random() * 40 - 20}px, ${Math.random() * 40 - 20}px)`,
@@ -509,5 +514,3 @@ export function CyberTypeDefense() {
     </div>
   );
 }
-
-    
