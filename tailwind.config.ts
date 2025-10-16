@@ -10,8 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['Inter', 'sans-serif'],
-        headline: ['Inter', 'sans-serif'],
+        body: ['"Space Grotesk"', 'sans-serif'],
+        headline: ['"Space Grotesk"', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {
@@ -64,6 +64,14 @@ export default {
           'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
+        },
+        threat: {
+          malware: 'hsl(var(--threat-malware))',
+          phishing: 'hsl(var(--threat-phishing))',
+          ddos: 'hsl(var(--threat-ddos))',
+          ransomware: 'hsl(var(--threat-ransomware))',
+          spyware: 'hsl(var(--threat-spyware))',
+          adware: 'hsl(var(--threat-adware))',
         },
       },
       borderRadius: {
