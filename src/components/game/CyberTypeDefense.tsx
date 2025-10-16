@@ -138,8 +138,13 @@ const initialState: GameState = {
 };
 
 const spawnEnemy = (level: number, word: string): Enemy => {
-    const enemyTypes = Object.keys(ENEMY_TYPES).filter(t => !['Boss', 'SplitterChild'].includes(t)) as (keyof typeof ENEMY_TYPES)[];
-    const type = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    let allowedEnemyTypes: (keyof typeof ENEMY_TYPES)[] = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware'];
+
+    if (level >= 2) allowedEnemyTypes.push('Stealth');
+    if (level >= 3) allowedEnemyTypes.push('Glitch');
+    if (level >= 4) allowedEnemyTypes.push('Splitter');
+
+    const type = allowedEnemyTypes[Math.floor(Math.random() * allowedEnemyTypes.length)];
     
     const lengthModifier = 1 - (Math.min(word.length, 15) - 4) * 0.05;
     const baseSpeed = (0.5 + level * 0.1) * Math.max(0.5, lengthModifier);
@@ -795,24 +800,24 @@ useEffect(() => {
 useEffect(() => {
     if (status !== 'playing') return;
 
-    let spawnerInterval: NodeJS.Timeout;
+    const spawnerInterval = setInterval(() => {
+        if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
+            dispatch({ type: 'ADD_POWERUP' });
+        }
+    }, 10000);
 
-    // Wait 5 seconds before starting to spawn power-ups
-    const initialDelay = setTimeout(() => {
-        spawnerInterval = setInterval(() => {
-            if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
-                dispatch({ type: 'ADD_POWERUP' });
-            }
-        }, 10000);
+    // Wait 5 seconds before starting to spawn power-ups for the first time
+    const initialTimeout = setTimeout(() => {
+        if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
+            dispatch({ type: 'ADD_POWERUP' });
+        }
     }, 5000);
 
     return () => {
-        clearTimeout(initialDelay);
-        if (spawnerInterval) {
-            clearInterval(spawnerInterval);
-        }
+        clearInterval(spawnerInterval);
+        clearTimeout(initialTimeout);
     };
-}, [status, level, powerUps.length]);
+}, [status, level]);
 
 
   // Effect and entity cleanup loop
@@ -895,7 +900,7 @@ useEffect(() => {
               </div>
             ))}
             
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-20">
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
               <Turret />
             </div>
 
