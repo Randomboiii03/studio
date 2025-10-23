@@ -894,20 +894,25 @@ useEffect(() => {
       {level: 3, type: 'Glitch'},
       {level: 4, type: 'Splitter'},
     ];
+    
     if (level % 5 === 0) {
-        newThreats.push({level: level, type: 'Boss'});
+      newThreats.push({level, type: 'Boss'});
     }
 
 
-    const threatForLevel = newThreats.find(t => t.level === level);
-    if(threatForLevel) {
-      const enemyInfo = ENEMY_TYPES[threatForLevel.type];
-      dispatch({ type: 'ADD_ANNOUNCEMENT', payload: {
-        message: `New Threat: ${threatForLevel.type}`,
-        description: enemyInfo.description,
-        icon: enemyInfo.icon
-      }});
-    }
+    newThreats.forEach(threat => {
+      if (threat.level === level) {
+        const enemyInfo = ENEMY_TYPES[threat.type];
+        dispatch({
+          type: 'ADD_ANNOUNCEMENT',
+          payload: {
+            message: `New Threat: ${threat.type}`,
+            description: enemyInfo.description,
+            icon: enemyInfo.icon,
+          },
+        });
+      }
+    });
 
 }, [status, level]);
 
@@ -1061,3 +1066,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
