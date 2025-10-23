@@ -795,7 +795,7 @@ export function CyberTypeDefense() {
 
 // AI Phrase Generation for levels
 useEffect(() => {
-    if (status !== 'playing' || levelPhrases[level]) return;
+    if (status !== 'playing') return;
 
     const fetchPhrase = async () => {
         try {
@@ -810,7 +810,7 @@ useEffect(() => {
         }
     };
     fetchPhrase();
-}, [status, level, levelPhrases]);
+}, [status, level]);
 
 // Enemy Spawner
 useEffect(() => {
@@ -859,18 +859,10 @@ useEffect(() => {
         }
     }, 10000);
 
-    // Wait 5 seconds before starting to spawn power-ups for the first time each level
-    const initialTimeout = setTimeout(() => {
-        if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
-            dispatch({ type: 'ADD_POWERUP' });
-        }
-    }, 5000);
-
     return () => {
         clearInterval(spawnerInterval);
-        clearTimeout(initialTimeout);
     };
-}, [status]);
+}, [status, level]);
 
 // Level Announcements
 useEffect(() => {
@@ -1042,3 +1034,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
