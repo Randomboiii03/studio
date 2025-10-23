@@ -46,7 +46,7 @@ type Projectile = {
   targetY: number;
 };
 
-type Explosion = { id: string; x: number; y: string; color: string; };
+type Explosion = { id: string; x: number; y: number; color: string; };
 
 type PowerUp = {
   id: number;
@@ -795,11 +795,9 @@ export function CyberTypeDefense() {
 
 // AI Phrase Generation for levels
 useEffect(() => {
-    if (status !== 'playing') return;
+    if (status !== 'playing' || levelPhrases[level]) return;
 
     const fetchPhrase = async () => {
-        if (levelPhrases[level]) return;
-
         try {
             const result = await generatePhrase();
             if (result && result.words) {
@@ -816,7 +814,7 @@ useEffect(() => {
 
 // Enemy Spawner
 useEffect(() => {
-    if (status !== 'playing' || enemies.length > 0) return;
+    if (status !== 'playing' || enemies.length > 0 || !levelPhrases[level]) return;
 
     const spawn = () => {
         if (status !== 'playing') return;
