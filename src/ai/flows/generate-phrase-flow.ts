@@ -20,16 +20,28 @@ const prompt = ai.definePrompt({
   output: { schema: GeneratePhraseOutputSchema },
   prompt: `You are a cybersecurity expert creating content for a typing game.
 Generate a single, short, simple phrase (3-5 words) related to the broad themes of cybersecurity, hacking, or digital defense. The words should be easy to type.
+To ensure variety, randomly pick one of the following themes for each phrase you generate:
+- Phishing awareness
+- Strong password practices
+- Multi-factor authentication (MFA)
+- Data privacy
+- Safe browsing habits
+- Recognizing malware/ransomware
+- Secure coding practices
+- Network security
 
 Make the phrases sound cool and thematic.
 
-Example Phrases:
+Example Phrases for different themes:
 - "encrypt the data stream"
 - "patch the system vulnerability"
 - "defend the network node"
 - "bypass the access control"
 - "analyze the packet capture"
 - "launch the trojan horse"
+- "verify the sender email"
+- "use a complex password"
+- "enable two factor auth"
 `,
 });
 
@@ -45,7 +57,7 @@ const generatePhraseFlow = ai.defineFlow(
     }
     // Ensure all words are lowercase
     return {
-        words: output.words.map(word => word.toLowerCase())
+        words: output.words.join(' ').toLowerCase().split(' ')
     };
   }
 );

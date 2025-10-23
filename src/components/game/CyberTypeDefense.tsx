@@ -466,7 +466,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
       let newEnemies: Enemy[] = [];
       const enemyIndex = updatedEnemies.findIndex(e => e.id === targetId);
 
-      if (enemy.type === 'Splitter') {
+      if (enemy.type === 'Splitter' && !enemy.isSplitterChild) {
           newEnemies.push(spawnSplitterChild(enemy));
           newEnemies.push(spawnSplitterChild(enemy));
           updatedEnemies.splice(enemyIndex, 1);
@@ -826,9 +826,10 @@ useEffect(() => {
         }
     };
     
-    // Fetch a new phrase for every level, every time.
-    fetchPhrase();
-}, [status, level]);
+    if (!levelPhrases[level]) {
+      fetchPhrase();
+    }
+}, [status, level, levelPhrases]);
 
 // Enemy Spawner
 useEffect(() => {
@@ -892,8 +893,11 @@ useEffect(() => {
       {level: 2, type: 'Stealth'},
       {level: 3, type: 'Glitch'},
       {level: 4, type: 'Splitter'},
-      {level: 5, type: 'Boss'},
     ];
+    if (level % 5 === 0) {
+        newThreats.push({level: level, type: 'Boss'});
+    }
+
 
     const threatForLevel = newThreats.find(t => t.level === level);
     if(threatForLevel) {
@@ -949,10 +953,6 @@ useEffect(() => {
           </div>
         ) : (
           <>
-            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
-                <Pause />
-            </Button>
-            
             <div className="absolute top-4 left-4 z-40 w-[320px]">
                 {announcements.map((announcement) => (
                     <div key={announcement.id} className="absolute">
@@ -965,6 +965,10 @@ useEffect(() => {
                     </div>
                 ))}
             </div>
+            
+            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
+                <Pause />
+            </Button>
 
             <div className="absolute inset-0 pointer-events-none z-10">
                 {isFrozen && <div className="absolute inset-0 bg-cyan-400/20 animate-pulse" />}

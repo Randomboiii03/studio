@@ -51,7 +51,7 @@ const generateBossPhraseFlow = ai.defineFlow(
     }
     // Ensure all words are lowercase
     return {
-        words: output.words.map(word => word.toLowerCase())
+        words: output.words.join(' ').toLowerCase().split(' ')
     };
   }
 );
