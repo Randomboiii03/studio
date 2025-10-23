@@ -724,6 +724,8 @@ export function CyberTypeDefense() {
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
   const inputShakeTimeoutRef = useRef<NodeJS.Timeout>();
   const nukeTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastAnnouncedLevel = useRef(0);
+
 
   const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, announcements, inputValue, isShaking, inputErrorShake, nukeEffect, levelPhrases } = state;
 
@@ -893,27 +895,27 @@ useEffect(() => {
       {level: 2, type: 'Stealth'},
       {level: 3, type: 'Glitch'},
       {level: 4, type: 'Splitter'},
+      {level: 5, type: 'Boss'}
     ];
-    
-    if (level % 5 === 0) {
-      newThreats.push({level, type: 'Boss'});
+
+    if (level > lastAnnouncedLevel.current) {
+        for (let i = lastAnnouncedLevel.current + 1; i <= level; i++) {
+            const threatsForLevel = newThreats.filter(t => t.level === i);
+            
+            threatsForLevel.forEach(threat => {
+                const enemyInfo = ENEMY_TYPES[threat.type];
+                dispatch({
+                    type: 'ADD_ANNOUNCEMENT',
+                    payload: {
+                        message: `New Threat: ${threat.type}`,
+                        description: enemyInfo.description,
+                        icon: enemyInfo.icon,
+                    },
+                });
+            });
+        }
+        lastAnnouncedLevel.current = level;
     }
-
-
-    newThreats.forEach(threat => {
-      if (threat.level === level) {
-        const enemyInfo = ENEMY_TYPES[threat.type];
-        dispatch({
-          type: 'ADD_ANNOUNCEMENT',
-          payload: {
-            message: `New Threat: ${threat.type}`,
-            description: enemyInfo.description,
-            icon: enemyInfo.icon,
-          },
-        });
-      }
-    });
-
 }, [status, level]);
 
   // Effect and entity cleanup loop
@@ -958,6 +960,9 @@ useEffect(() => {
           </div>
         ) : (
           <>
+            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
+                <Pause />
+            </Button>
             <div className="absolute top-4 left-4 z-40 w-[320px]">
                 {announcements.map((announcement) => (
                     <div key={announcement.id} className="absolute">
@@ -971,10 +976,6 @@ useEffect(() => {
                 ))}
             </div>
             
-            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
-                <Pause />
-            </Button>
-
             <div className="absolute inset-0 pointer-events-none z-10">
                 {isFrozen && <div className="absolute inset-0 bg-cyan-400/20 animate-pulse" />}
                 {nukeEffect && <div className="absolute inset-0 bg-white animate-fade-dots" />}
@@ -1066,3 +1067,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
