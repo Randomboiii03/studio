@@ -44,13 +44,16 @@ const generatePhraseFlow = ai.defineFlow(
   },
   async () => {
     const { output } = await prompt();
-    return output!;
+    if (!output) {
+      return { words: ['secure', 'the', 'system'] };
+    }
+    // Ensure all words are lowercase
+    return {
+        words: output.words.map(word => word.toLowerCase())
+    };
   }
 );
 
 export async function generatePhrase(): Promise<GeneratePhraseOutput> {
     return generatePhraseFlow();
 }
-
-
-    

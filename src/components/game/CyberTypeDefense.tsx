@@ -118,7 +118,7 @@ type Action =
   | { type: 'RESET_COMBO' }
   | { type: 'ADD_ANNOUNCEMENT'; payload: Omit<Announcement, 'id'> }
   | { type: 'REMOVE_ANNOUNCEMENT'; payload: { id: number } }
-  | { type: 'SET_LEVEL_PHRASES'; payload: Record<number, string[]> };
+  | { type: 'SET_LEVEL_PHRASES'; payload: { level: number; phrase: string[] } };
 
 
 const INITIAL_LIVES = 10;
@@ -337,9 +337,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
           if (newX < 50 || newX > GAME_WIDTH - 50) {
               newVx = -p.vx;
+              newX = p.x + newVx;
           }
           if (newY < 50 || newY > GAME_HEIGHT / 2) {
               newVy = -p.vy;
+              newY = p.y + newVy;
           }
           
           return {
@@ -670,7 +672,13 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             announcements: state.announcements.filter(a => a.id !== action.payload.id),
         };
     case 'SET_LEVEL_PHRASES':
-        return { ...state, levelPhrases: action.payload };
+        return {
+            ...state,
+            levelPhrases: {
+                ...state.levelPhrases,
+                [action.payload.level]: action.payload.phrase,
+            },
+        };
     
     default:
       return state;
@@ -799,16 +807,16 @@ useEffect(() => {
         try {
             const result = await generatePhrase();
             if (result && result.words) {
-                dispatch({ type: 'SET_LEVEL_PHRASES', payload: {...levelPhrases, [level]: result.words} });
+                dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level, phrase: result.words } });
             }
         } catch (error) {
             console.error("AI Phrase generation failed, using fallback:", error);
             const fallbackPhrase = HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
-            dispatch({ type: 'SET_LEVEL_PHRASES', payload: {...levelPhrases, [level]: fallbackPhrase} });
+            dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level, phrase: fallbackPhrase } });
         }
     };
 
-    // Force a new phrase for every level
+    // Force a new phrase for every level, every time
     fetchPhrase();
 }, [status, level]);
 
@@ -854,15 +862,17 @@ useEffect(() => {
     if (status !== 'playing') return;
 
     const spawnerInterval = setInterval(() => {
-        if (status === 'playing' && (level % 5 !== 0) && powerUps.length < 2 && Math.random() < 0.25) {
-            dispatch({ type: 'ADD_POWERUP' });
+        if (powerUps.length < 2 && Math.random() < 0.25) {
+            if(level % 5 !== 0) {
+                 dispatch({ type: 'ADD_POWERUP' });
+            }
         }
     }, 10000);
 
     return () => {
         clearInterval(spawnerInterval);
     };
-}, [status]);
+}, [status, level]);
 
 // Level Announcements
 useEffect(() => {
@@ -879,7 +889,7 @@ useEffect(() => {
     if(threatForLevel) {
       const enemyInfo = ENEMY_TYPES[threatForLevel.type];
       dispatch({ type: 'ADD_ANNOUNCEMENT', payload: {
-        message: `New Threat Detected: ${threatForLevel.type}`,
+        message: `New Threat: ${threatForLevel.type}`,
         icon: enemyInfo.icon
       }});
     }
@@ -932,14 +942,15 @@ useEffect(() => {
                 <Pause />
             </Button>
             
-            <div className="absolute top-4 right-4 z-40 w-[320px] pt-12">
-                {announcements.map(announcement => (
-                    <StageAnnouncement
-                        key={announcement.id}
-                        message={announcement.message}
-                        icon={announcement.icon}
-                        onComplete={() => dispatch({ type: 'REMOVE_ANNOUNCEMENT', payload: { id: announcement.id } })}
-                    />
+            <div className="absolute top-4 left-4 z-40 w-[320px]">
+                {announcements.map((announcement, index) => (
+                    <div key={announcement.id} className="absolute" style={{top: 0}}>
+                        <StageAnnouncement
+                            message={announcement.message}
+                            icon={announcement.icon}
+                            onComplete={() => dispatch({ type: 'REMOVE_ANNOUNCEMENT', payload: { id: announcement.id } })}
+                        />
+                    </div>
                 ))}
             </div>
 
@@ -1034,7 +1045,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
-
-    
