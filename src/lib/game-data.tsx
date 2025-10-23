@@ -2,39 +2,53 @@
 import { Shield, Bug, Siren, Biohazard, ServerCrash, Bot, Skull, Snowflake, Bomb, EyeOff, Fingerprint, GitFork } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export const WORDS_LIST = [
-    // Phishing Awareness
-    "alert", "verify", "sender", "official", "link", "hover", "check", "spoofing",
-    "urgent", "request", "login", "details", "source", "email", "scam",
-
-    // Strong Password Practices
-    "phrase", "unique", "random", "complex", "manager", "vault", "secret",
-    "characters", "change", "strong", "long", "passkey",
-
-    // Multi-factor Authentication (MFA)
-    "code", "token", "prompt", "factor", "auth", "secure", "app", "text", "call",
-    "biometric", "fob", "one-time",
-
-    // Data Privacy
-    "consent", "private", "share", "encrypt", "policy", "data", "anonymous",
-    "delete", "info", "protect", "privacy", "permission",
-
-    // Safe Browsing Habits
-    "https", "secure", "lock", "update", "public", "wifi", "browser", "cookie",
-    "adblock", "search", "connection", "domain", "patch",
-
-    // Recognizing Malware/Ransomware
-    "virus", "threat", "backup", "scan", "file", "block", "ransom", "malware",
-    "clean", "download", "attachment", "popup", "warning",
-
-    // Secure Coding Practices
-    "input", "validate", "sanitize", "escape", "review", "test", "guard",
-    "exploit", "harden", "logic", "principle", "least"
-].filter(w => w !== 'reboot' && w !== 'antivirus');
-
 export const GLITCH_WORDS_LIST = ["glitch", "static", "corrupt", "fragment", "error", "binary", "system", "kernel"];
 
-export const BOSS_WORDS_LIST = [
+export const LEVEL_PHRASES = [
+    // Phishing Awareness
+    ["alert", "verify", "sender"],
+    ["official", "link", "hover"],
+    ["check", "spoofing", "urgent"],
+    ["request", "login", "details"],
+    ["source", "email", "scam"],
+
+    // Strong Password Practices
+    ["phrase", "unique", "random"],
+    ["complex", "manager", "vault"],
+    ["secret", "characters", "change"],
+    ["strong", "long", "passkey"],
+
+    // Multi-factor Authentication (MFA)
+    ["code", "token", "prompt"],
+    ["factor", "auth", "secure"],
+    ["app", "text", "call"],
+    ["biometric", "fob", "one-time"],
+
+    // Data Privacy
+    ["consent", "private", "share"],
+    ["encrypt", "policy", "data"],
+    ["anonymous", "delete", "info"],
+    ["protect", "privacy", "permission"],
+
+    // Safe Browsing Habits
+    ["https", "secure", "lock"],
+    ["update", "public", "wifi"],
+    ["browser", "cookie", "adblock"],
+    ["search", "connection", "domain"],
+
+    // Recognizing Malware/Ransomware
+    ["virus", "threat", "backup"],
+    ["scan", "file", "block"],
+    ["ransom", "malware", "clean"],
+    ["download", "attachment", "popup"],
+
+    // Secure Coding Practices
+    ["input", "validate", "sanitize"],
+    ["escape", "review", "test"],
+    ["guard", "exploit", "harden"],
+    ["logic", "principle", "least"],
+
+    // Boss Phrases
     ['check', 'sender', 'before', 'clicking', 'link'],
     ['use', 'strong', 'unique', 'passwords', 'always'],
     ['enable', 'multi', 'factor', 'auth', 'now'],

@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, WORDS_LIST, BOSS_WORDS_LIST, POWER_UP_TYPES, GLITCH_WORDS_LIST } from '@/lib/game-data';
+import { ENEMY_TYPES, LEVEL_PHRASES, POWER_UP_TYPES, GLITCH_WORDS_LIST } from '@/lib/game-data';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
@@ -195,15 +195,14 @@ const spawnEnemy = (level: number, word: string): Enemy => {
     }
 
     if (type === 'Splitter') {
-        // Longer word for splitter
-        enemy.words = [WORDS_LIST.find(w => w.length > 6) || 'destabilize'];
+        enemy.words = [(LEVEL_PHRASES.find(p => p.length === 1 && p[0].length > 6) || ['destabilize'])[0]];
     }
 
     return enemy;
 };
 
 const spawnSplitterChild = (parent: Enemy): Enemy => {
-    const word = WORDS_LIST[Math.floor(Math.random() * WORDS_LIST.length)];
+    const word = (LEVEL_PHRASES.find(p => p.length === 1) || ['error'])[0];
     return {
         id: enemyIdCounter++,
         words: [word],
@@ -220,8 +219,7 @@ const spawnSplitterChild = (parent: Enemy): Enemy => {
     };
 };
 
-const spawnBoss = (level: number): Enemy => {
-    const bossWords = BOSS_WORDS_LIST[Math.floor(Math.random() * BOSS_WORDS_LIST.length)];
+const spawnBoss = (level: number, phrase: string[]): Enemy => {
     const type = 'Boss';
     const baseSpeed = (0.3 + level * 0.05);
 
@@ -233,7 +231,7 @@ const spawnBoss = (level: number): Enemy => {
 
     return {
         id: enemyIdCounter++,
-        words: bossWords,
+        words: phrase,
         currentWordIndex: 0,
         x: startX,
         y: startY,
@@ -607,10 +605,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 if (nonBossEnemies.length === 0) break;
 
-                let currentCombo = newState.combo;
                 nonBossEnemies.forEach(enemy => {
-                    currentCombo++;
-                    const scoreGained = enemy.words[0].length * 10 * (currentCombo > 1 ? currentCombo : 1);
+                    const currentCombo = newState.combo + 1;
+                    const scoreGained = enemy.words[0].length * 10 * currentCombo;
                     const explosion: Explosion = {
                         id: `expl-${enemy.id}-${effectIdCounter++}`,
                         x: enemy.x,
@@ -792,20 +789,14 @@ useEffect(() => {
     const spawn = () => {
         if (status !== 'playing') return;
 
+        const phrase = LEVEL_PHRASES[Math.floor(Math.random() * LEVEL_PHRASES.length)];
+
         if (level % 5 === 0) {
             // Boss level
-            dispatch({ type: 'ADD_ENEMY', payload: spawnBoss(level) });
+            dispatch({ type: 'ADD_ENEMY', payload: spawnBoss(level, phrase) });
         } else {
-            // Regular level: ensure unique words per wave
-            const waveSize = Math.min(5 + level, 15);
-            const availableWords = [...WORDS_LIST];
-            const waveWords: string[] = [];
-
-            for (let i = 0; i < waveSize; i++) {
-                if (availableWords.length === 0) break; // No more unique words
-                const wordIndex = Math.floor(Math.random() * availableWords.length);
-                waveWords.push(availableWords.splice(wordIndex, 1)[0]);
-            }
+            // Regular level
+            const waveWords = phrase;
             
             // Stagger the spawning of enemies
             const baseInterval = 1500;
@@ -1020,5 +1011,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
