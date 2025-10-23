@@ -385,7 +385,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           if (enemy) {
               const dx = p.x - enemy.x;
               const dy = p.y - enemy.y;
-              if (Math.sqrt(dx * dx + dy * dy) < 25) {
+              if (Math.sqrt(dx * dx + dy) < 25) {
                   hitProjectiles.push(p.targetId);
               }
           }
@@ -1066,5 +1066,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
