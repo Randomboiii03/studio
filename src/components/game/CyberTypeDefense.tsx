@@ -227,7 +227,7 @@ const spawnSplitterChild = (parent: Enemy): Enemy => {
         y: parent.y - 20, // Push back slightly
         speed: parent.speed * 1.5,
         type: 'SplitterChild',
-        vx: (Math.random() - 0.5) * 2,
+        vx: (Math.random() - 0.5) * 0.5,
         vy: parent.vy * 1.2,
         status: 'alive',
         isBoss: false,
@@ -1067,5 +1067,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
