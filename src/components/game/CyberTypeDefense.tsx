@@ -46,7 +46,7 @@ type Projectile = {
   targetY: number;
 };
 
-type Explosion = { id: string; x: number; y: number; color: string; };
+type Explosion = { id: string; x: number; y: string; color: string; };
 
 type PowerUp = {
   id: number;
@@ -89,6 +89,7 @@ type GameState = {
   inputErrorShake: boolean;
   nukeEffect: boolean;
   lastHitTime: number;
+  levelPhrases: Record<number, string[]>;
 };
 
 type Action =
@@ -116,7 +117,8 @@ type Action =
   | { type: 'STOP_NUKE_EFFECT' }
   | { type: 'RESET_COMBO' }
   | { type: 'ADD_ANNOUNCEMENT'; payload: Omit<Announcement, 'id'> }
-  | { type: 'REMOVE_ANNOUNCEMENT'; payload: { id: number } };
+  | { type: 'REMOVE_ANNOUNCEMENT'; payload: { id: number } }
+  | { type: 'SET_LEVEL_PHRASES'; payload: Record<number, string[]> };
 
 
 const INITIAL_LIVES = 10;
@@ -153,6 +155,7 @@ const initialState: GameState = {
   inputErrorShake: false,
   nukeEffect: false,
   lastHitTime: 0,
+  levelPhrases: {},
 };
 
 const spawnEnemy = (level: number, word: string): Enemy => {
@@ -261,13 +264,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         ...initialState,
         status: 'playing',
         lastHitTime: Date.now(),
+        levelPhrases: {},
       };
     case 'RESET_GAME':
       enemyIdCounter = 0;
       effectIdCounter = 0;
       powerUpIdCounter = 0;
       announcementIdCounter = 0;
-      return { ...initialState, status: 'playing', lastHitTime: Date.now() };
+      return { ...initialState, status: 'playing', lastHitTime: Date.now(), levelPhrases: {} };
 
     case 'EXIT_GAME':
         return { ...initialState };
@@ -667,6 +671,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             ...state,
             announcements: state.announcements.filter(a => a.id !== action.payload.id),
         };
+    case 'SET_LEVEL_PHRASES':
+        return { ...state, levelPhrases: action.payload };
     
     default:
       return state;
@@ -700,14 +706,13 @@ const ActivePowerUpIndicator = ({ powerUp }: { powerUp: ActivePowerUp }) => {
 
 export function CyberTypeDefense() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
-  const [levelPhrases, setLevelPhrases] = useState<Record<number, string[]>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
   const inputShakeTimeoutRef = useRef<NodeJS.Timeout>();
   const nukeTimeoutRef = useRef<NodeJS.Timeout>();
 
-  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, announcements, inputValue, isShaking, inputErrorShake, nukeEffect } = state;
+  const { status, score, lives, shield, combo, level, enemies, projectiles, explosions, powerUps, activePowerUps, announcements, inputValue, isShaking, inputErrorShake, nukeEffect, levelPhrases } = state;
 
   useEffect(() => {
     if (isShaking) {
@@ -793,22 +798,21 @@ useEffect(() => {
     if (status !== 'playing') return;
 
     const fetchPhrase = async () => {
-        if (levelPhrases[level] || (level % 5 === 0)) return; // Don't fetch for boss levels or if already fetched
+        if (levelPhrases[level]) return;
 
         try {
             const result = await generatePhrase();
             if (result && result.words) {
-                setLevelPhrases(prev => ({...prev, [level]: result.words}));
+                dispatch({ type: 'SET_LEVEL_PHRASES', payload: {...levelPhrases, [level]: result.words} });
             }
         } catch (error) {
             console.error("AI Phrase generation failed, using fallback:", error);
-            // Fallback to a hardcoded phrase
             const fallbackPhrase = HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
-            setLevelPhrases(prev => ({...prev, [level]: fallbackPhrase}));
+            dispatch({ type: 'SET_LEVEL_PHRASES', payload: {...levelPhrases, [level]: fallbackPhrase} });
         }
     };
     fetchPhrase();
-}, [status, level]);
+}, [status, level, levelPhrases]);
 
 // Enemy Spawner
 useEffect(() => {
@@ -868,7 +872,7 @@ useEffect(() => {
         clearInterval(spawnerInterval);
         clearTimeout(initialTimeout);
     };
-}, [status]);
+}, [status, level]);
 
 // Level Announcements
 useEffect(() => {
@@ -1040,3 +1044,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
