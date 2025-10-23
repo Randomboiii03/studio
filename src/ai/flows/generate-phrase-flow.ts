@@ -20,6 +20,15 @@ const prompt = ai.definePrompt({
   output: { schema: GeneratePhraseOutputSchema },
   prompt: `You are a cybersecurity expert creating content for a typing game. Generate a single, short, simple phrase (3-5 words) that is a cybersecurity tip. The words should be easy to type.
 
+The phrase must be about one of the following topics:
+- Phishing awareness (e.g., "check email links")
+- Strong password practices (e.g., "use a long password")
+- Multi-factor authentication (MFA) (e.g., "enable mfa now")
+- Data privacy (e.g., "protect your personal data")
+- Safe browsing habits (e.g., "avoid public wifi")
+- Recognizing malware/ransomware (e.g., "scan files before opening")
+- Secure coding practices (e.g., "sanitize your user input")
+
 Example:
 - "update your passwords now"
 - "be careful with public wifi"

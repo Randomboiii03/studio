@@ -870,7 +870,7 @@ useEffect(() => {
         clearInterval(spawnerInterval);
         clearTimeout(initialTimeout);
     };
-}, [status, level]);
+}, [status]);
 
 // Level Announcements
 useEffect(() => {
@@ -936,7 +936,11 @@ useEffect(() => {
           </div>
         ) : (
           <>
-            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2">
+            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-50 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
+                <Pause />
+            </Button>
+            
+            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2 pt-12">
                 {announcements.map(announcement => (
                     <StageAnnouncement
                         key={announcement.id}
@@ -952,10 +956,6 @@ useEffect(() => {
                 {nukeEffect && <div className="absolute inset-0 bg-white animate-fade-dots" />}
                 {isShielded && <div className="absolute inset-0 border-[6px] border-blue-500/50 rounded-lg animate-pulse" />}
             </div>
-
-            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-30 text-primary hover:bg-primary/10 hover:text-primary" onClick={() => dispatch({type: 'PAUSE_GAME'})}>
-                <Pause />
-            </Button>
             
             {enemies.map(enemy => (
               <EnemyComponent key={enemy.id} word={enemy.words[enemy.currentWordIndex]} {...enemy} />
@@ -1042,5 +1042,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
