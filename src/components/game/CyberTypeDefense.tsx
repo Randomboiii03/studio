@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Award, Heart, Pause, Zap, Shield as ShieldIcon } from 'lucide-react';
 import type { PowerUpType } from '@/lib/game-data';
 import { generatePhrase } from '@/ai/flows/generate-phrase-flow';
+import { generateBossPhrase } from '@/ai/flows/generate-boss-phrase-flow';
 
 type Enemy = {
   id: number;
@@ -135,6 +137,10 @@ const HARDCODED_PHRASES = [
     ['scan', 'your', 'files'],
     ['use', 'strong', 'passwords'],
     ['beware', 'of', 'scams'],
+];
+const HARDCODED_BOSS_PHRASES = [
+    ['always', 'verify', 'the', 'source', 'of', 'your', 'downloads'],
+    ['protect', 'your', 'digital', 'identity', 'at', 'all', 'costs'],
 ];
 
 const initialState: GameState = {
@@ -804,21 +810,26 @@ useEffect(() => {
     if (status !== 'playing') return;
 
     const fetchPhrase = async () => {
+        const isBossLevel = level % 5 === 0;
         try {
-            const result = await generatePhrase();
+            const result = isBossLevel ? await generateBossPhrase() : await generatePhrase();
             if (result && result.words) {
                 dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level, phrase: result.words } });
             }
         } catch (error) {
             console.error("AI Phrase generation failed, using fallback:", error);
-            const fallbackPhrase = HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
+            const fallbackPhrase = isBossLevel
+                ? HARDCODED_BOSS_PHRASES[Math.floor(Math.random() * HARDCODED_BOSS_PHRASES.length)]
+                : HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
             dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level, phrase: fallbackPhrase } });
         }
     };
-
-    // Force a new phrase for every level, every time
-    fetchPhrase();
-}, [status, level]);
+    
+    // Fetch a new phrase for every level, every time, as long as one isn't already being fetched.
+    if (!levelPhrases[level]) {
+        fetchPhrase();
+    }
+}, [status, level, levelPhrases]);
 
 // Enemy Spawner
 useEffect(() => {
@@ -827,7 +838,7 @@ useEffect(() => {
     const spawn = () => {
         if (status !== 'playing') return;
 
-        const phrase = levelPhrases[level] || HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
+        const phrase = levelPhrases[level];
 
         if (level % 5 === 0) {
             // Boss level
@@ -943,7 +954,7 @@ useEffect(() => {
             </Button>
             
             <div className="absolute top-4 left-4 z-40 w-[320px]">
-                {announcements.map((announcement, index) => (
+                {announcements.map((announcement) => (
                     <div key={announcement.id} className="absolute" style={{top: 0}}>
                         <StageAnnouncement
                             message={announcement.message}
