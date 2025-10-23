@@ -8,20 +8,21 @@ export type EnemyTypeInfo = {
   icon: LucideIcon;
   className: string;
   speed: number;
+  description: string;
 };
 
 export const ENEMY_TYPES: { [key: string]: EnemyTypeInfo } = {
-    Malware: { icon: Bug, className: 'text-threat-malware', speed: 1 },
-    Phishing: { icon: Shield, className: 'text-threat-phishing', speed: 1.2 },
-    DDoS: { icon: Siren, className: 'text-threat-ddos', speed: 0.8 },
-    Ransomware: { icon: Biohazard, className: 'text-threat-ransomware', speed: 1.1 },
-    Spyware: { icon: ServerCrash, className: 'text-threat-spyware', speed: 1.3 },
-    Adware: { icon: Bot, className: 'text-threat-adware', speed: 0.9 },
-    Stealth: { icon: EyeOff, className: 'text-threat-stealth', speed: 1.1 },
-    Glitch: { icon: Fingerprint, className: 'text-threat-glitch', speed: 1.0 },
-    Splitter: { icon: GitFork, className: 'text-threat-splitter', speed: 0.9 },
-    SplitterChild: { icon: GitFork, className: 'text-threat-splitter', speed: 1.5 },
-    Boss: { icon: Skull, className: 'text-destructive', speed: 0.5 },
+    Malware: { icon: Bug, className: 'text-threat-malware', speed: 1, description: "Standard hostile program." },
+    Phishing: { icon: Shield, className: 'text-threat-phishing', speed: 1.2, description: "Deceptive entity, moves faster." },
+    DDoS: { icon: Siren, className: 'text-threat-ddos', speed: 0.8, description: "Slow but resilient." },
+    Ransomware: { icon: Biohazard, className: 'text-threat-ransomware', speed: 1.1, description: "Locks down system resources." },
+    Spyware: { icon: ServerCrash, className: 'text-threat-spyware', speed: 1.3, description: "Fast-moving data thief." },
+    Adware: { icon: Bot, className: 'text-threat-adware', speed: 0.9, description: "Distracts and clutters the system." },
+    Stealth: { icon: EyeOff, className: 'text-threat-stealth', speed: 1.1, description: "Cloaked until it nears the firewall." },
+    Glitch: { icon: Fingerprint, className: 'text-threat-glitch', speed: 1.0, description: "Scrambles its signature periodically." },
+    Splitter: { icon: GitFork, className: 'text-threat-splitter', speed: 0.9, description: "Splits into two smaller fragments." },
+    SplitterChild: { icon: GitFork, className: 'text-threat-splitter', speed: 1.5, description: "Fast but weak fragment." },
+    Boss: { icon: Skull, className: 'text-destructive', speed: 0.5, description: "A powerful foe with a long defense phrase." },
 };
 
 export type PowerUpType = 'Freeze' | 'Nuke' | 'Shield';

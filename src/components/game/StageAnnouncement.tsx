@@ -7,11 +7,12 @@ import { Info } from 'lucide-react';
 
 interface StageAnnouncementProps {
     message: string;
+    description: string;
     icon: React.ElementType;
     onComplete: () => void;
 }
 
-const StageAnnouncement: React.FC<StageAnnouncementProps> = ({ message, icon: Icon, onComplete }) => {
+const StageAnnouncement: React.FC<StageAnnouncementProps> = ({ message, description, icon: Icon, onComplete }) => {
     useEffect(() => {
         const timer = setTimeout(() => {
             onComplete();
@@ -26,14 +27,13 @@ const StageAnnouncement: React.FC<StageAnnouncementProps> = ({ message, icon: Ic
                 "absolute top-0 flex items-center gap-3 w-80 p-3 rounded-lg border bg-background/80 backdrop-blur-sm animate-announcement-fade"
             )}
         >
-            <Icon className="w-6 h-6 text-primary" />
+            <Icon className="w-6 h-6 text-primary flex-shrink-0" />
             <div className="flex flex-col">
                 <p className="font-mono text-sm text-primary">{message}</p>
+                <p className="font-mono text-xs text-muted-foreground">{description}</p>
             </div>
         </div>
     );
 };
 
 export default StageAnnouncement;
-
-    

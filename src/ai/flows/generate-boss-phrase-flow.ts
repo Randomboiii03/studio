@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const GenerateBossPhraseOutputSchema = z.object({
-  words: z.array(z.string()).describe('A longer, more complex array of words (6-8 words) forming a significant cybersecurity principle.'),
+  words: z.array(z.string()).describe('A longer, more complex array of words (6-8 words) forming a significant cybersecurity principle or hacking-related concept.'),
 });
 export type GenerateBossPhraseOutput = z.infer<typeof GenerateBossPhraseOutputSchema>;
 
@@ -19,21 +19,23 @@ const prompt = ai.definePrompt({
   name: 'generateBossPhrasePrompt',
   output: { schema: GenerateBossPhraseOutputSchema },
   prompt: `You are a cybersecurity expert creating challenging content for a typing game's boss battle.
-Generate a single, longer, and more complex phrase (6-8 words) that is a significant cybersecurity principle.
+Generate a single, longer, and more complex phrase (6-8 words) related to the broad themes of cybersecurity, hacking, or digital defense.
+The phrase should sound cool, thematic, and be a bit of a challenge to type.
 
-The phrase must be about one of the following topics. Please choose one topic randomly for each phrase you generate:
-- Phishing awareness (e.g., "always verify sender before you click")
-- Strong password practices (e.g., "a long unique password is key")
-- Multi-factor authentication (MFA) (e.g., "multi factor authentication protects your accounts")
-- Data privacy (e.g., "be mindful of what you share")
-- Safe browsing habits (e.g., "think twice before downloading unknown files")
-- Recognizing malware/ransomware (e.g., "unexpected popups can indicate serious malware")
-- Secure coding practices (e.g., "validate all input to prevent injection")
+Example themes:
+- Network infiltration
+- Encryption and decryption
+- Zero-day exploits
+- Advanced persistent threats
+- Social engineering
+- System vulnerabilities
 
-Example:
-- "never reuse your passwords on websites"
-- "always check for the https lock"
-- "secure your accounts with strong mfa"
+Example phrases:
+- "breach the firewall and access the mainframe"
+- "deploy the payload to compromise the system"
+- "execute the rootkit and gain full control"
+- "initiate zero-day exploit sequence"
+- "decrypt the classified government intel"
 `,
 });
 

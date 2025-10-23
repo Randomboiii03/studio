@@ -70,6 +70,7 @@ type ActivePowerUp = {
 type Announcement = {
   id: number;
   message: string;
+  description: string;
   icon: React.ElementType;
 };
 
@@ -825,11 +826,9 @@ useEffect(() => {
         }
     };
     
-    // Fetch a new phrase for every level, every time, as long as one isn't already being fetched.
-    if (!levelPhrases[level]) {
-        fetchPhrase();
-    }
-}, [status, level, levelPhrases]);
+    // Fetch a new phrase for every level, every time.
+    fetchPhrase();
+}, [status, level]);
 
 // Enemy Spawner
 useEffect(() => {
@@ -883,7 +882,7 @@ useEffect(() => {
     return () => {
         clearInterval(spawnerInterval);
     };
-}, [status, level]);
+}, [status, level, powerUps.length]);
 
 // Level Announcements
 useEffect(() => {
@@ -901,6 +900,7 @@ useEffect(() => {
       const enemyInfo = ENEMY_TYPES[threatForLevel.type];
       dispatch({ type: 'ADD_ANNOUNCEMENT', payload: {
         message: `New Threat: ${threatForLevel.type}`,
+        description: enemyInfo.description,
         icon: enemyInfo.icon
       }});
     }
@@ -955,9 +955,10 @@ useEffect(() => {
             
             <div className="absolute top-4 left-4 z-40 w-[320px]">
                 {announcements.map((announcement) => (
-                    <div key={announcement.id} className="absolute" style={{top: 0}}>
+                    <div key={announcement.id} className="absolute">
                         <StageAnnouncement
                             message={announcement.message}
+                            description={announcement.description}
                             icon={announcement.icon}
                             onComplete={() => dispatch({ type: 'REMOVE_ANNOUNCEMENT', payload: { id: announcement.id } })}
                         />
