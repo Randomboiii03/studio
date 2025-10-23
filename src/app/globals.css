@@ -154,16 +154,6 @@
   .animate-announcement-fade {
       animation: announcement-fade 5s ease-in-out forwards;
   }
-
-  @keyframes stealth-flicker {
-    0%, 100% { opacity: 0.1; }
-    20% { opacity: 0.6; }
-    30% { opacity: 0.2; }
-    50% { opacity: 0.8; }
-    60% { opacity: 0.1; }
-    80% { opacity: 0.4; }
-    90% { opacity: 0.2; }
-  }
 }
 
 
