@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useCallback, useEffect, useReducer, useRef } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ENEMY_TYPES, LEVEL_PHRASES, POWER_UP_TYPES, GLITCH_WORDS_LIST } from '@/lib/game-data';
+import { ENEMY_TYPES, POWER_UP_TYPES, GLITCH_WORDS_LIST } from '@/lib/game-data';
 import Turret from './Turret';
 import EnemyComponent from './Enemy';
 import GameOverModal from './GameOverModal';
@@ -14,6 +14,7 @@ import StageAnnouncement from './StageAnnouncement';
 import { cn } from '@/lib/utils';
 import { Award, Heart, Pause, Zap, Shield as ShieldIcon } from 'lucide-react';
 import type { PowerUpType } from '@/lib/game-data';
+import { generatePhrase } from '@/ai/flows/generate-phrase-flow';
 
 type Enemy = {
   id: number;
@@ -128,6 +129,11 @@ let effectIdCounter = 0;
 let powerUpIdCounter = 0;
 let announcementIdCounter = 0;
 const COMBO_TIMEOUT = 6000; // 6 seconds
+const HARDCODED_PHRASES = [
+    ['scan', 'your', 'files'],
+    ['use', 'strong', 'passwords'],
+    ['beware', 'of', 'scams'],
+];
 
 const initialState: GameState = {
   status: 'idle',
@@ -195,14 +201,14 @@ const spawnEnemy = (level: number, word: string): Enemy => {
     }
 
     if (type === 'Splitter') {
-        enemy.words = [(LEVEL_PHRASES.find(p => p.length === 1 && p[0].length > 6) || ['destabilize'])[0]];
+        enemy.words = [['destabilize'].sort(() => 0.5 - Math.random())[0]];
     }
 
     return enemy;
 };
 
 const spawnSplitterChild = (parent: Enemy): Enemy => {
-    const word = (LEVEL_PHRASES.find(p => p.length === 1) || ['error'])[0];
+    const word = (['error', 'bug', 'glitch', 'crash'].sort(() => 0.5 - Math.random())[0]);
     return {
         id: enemyIdCounter++,
         words: [word],
@@ -605,22 +611,21 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const nonBossEnemies = newState.enemies.filter(e => !e.isBoss && e.status === 'alive');
                 if (nonBossEnemies.length === 0) break;
 
+                // Award a fixed bonus score for each enemy nuked, not based on combo
+                const scorePerNukedEnemy = 100;
+                newState.score += nonBossEnemies.length * scorePerNukedEnemy;
+
                 nonBossEnemies.forEach(enemy => {
-                    const currentCombo = newState.combo + 1;
-                    const scoreGained = enemy.words[0].length * 10 * currentCombo;
                     const explosion: Explosion = {
                         id: `expl-${enemy.id}-${effectIdCounter++}`,
                         x: enemy.x,
                         y: enemy.y,
                         color: ENEMY_TYPES[enemy.type].className,
                     };
-                    newState.score += scoreGained;
-                    newState.combo = currentCombo;
                     newState.explosions.push(explosion);
                 });
                 
                 newState.enemies = newState.enemies.map(e => (!e.isBoss && e.status === 'alive') ? {...e, status: 'dying'} : e);
-                newState.lastHitTime = Date.now();
                 newState = gameReducer(newState, { type: 'TRIGGER_NUKE_EFFECT' });
                 break;
             }
@@ -695,6 +700,7 @@ const ActivePowerUpIndicator = ({ powerUp }: { powerUp: ActivePowerUp }) => {
 
 export function CyberTypeDefense() {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [levelPhrases, setLevelPhrases] = useState<Record<number, string[]>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const gameAreaRef = useRef<HTMLDivElement>(null);
   const shakeTimeoutRef = useRef<NodeJS.Timeout>();
@@ -782,6 +788,28 @@ export function CyberTypeDefense() {
   }, [status]);
 
 
+// AI Phrase Generation for levels
+useEffect(() => {
+    if (status !== 'playing') return;
+
+    const fetchPhrase = async () => {
+        if (levelPhrases[level] || (level % 5 === 0)) return; // Don't fetch for boss levels or if already fetched
+
+        try {
+            const result = await generatePhrase();
+            if (result && result.words) {
+                setLevelPhrases(prev => ({...prev, [level]: result.words}));
+            }
+        } catch (error) {
+            console.error("AI Phrase generation failed, using fallback:", error);
+            // Fallback to a hardcoded phrase
+            const fallbackPhrase = HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
+            setLevelPhrases(prev => ({...prev, [level]: fallbackPhrase}));
+        }
+    };
+    fetchPhrase();
+}, [status, level]);
+
 // Enemy Spawner
 useEffect(() => {
     if (status !== 'playing' || enemies.length > 0) return;
@@ -789,7 +817,7 @@ useEffect(() => {
     const spawn = () => {
         if (status !== 'playing') return;
 
-        const phrase = LEVEL_PHRASES[Math.floor(Math.random() * LEVEL_PHRASES.length)];
+        const phrase = levelPhrases[level] || HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
 
         if (level % 5 === 0) {
             // Boss level
@@ -816,7 +844,8 @@ useEffect(() => {
     const spawnTimeout = setTimeout(spawn, 2000);
     
     return () => clearTimeout(spawnTimeout);
-}, [status, level, enemies.length]);
+}, [status, level, enemies.length, levelPhrases]);
+
 
 // Power-up spawner
 useEffect(() => {
