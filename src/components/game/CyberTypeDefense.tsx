@@ -337,11 +337,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
 
           if (newX < 50 || newX > GAME_WIDTH - 50) {
               newVx = -p.vx;
-              newX = p.x + newVx;
           }
           if (newY < 50 || newY > GAME_HEIGHT / 2) {
               newVy = -p.vy;
-              newY = p.y + newVy;
           }
           
           return {
@@ -809,6 +807,8 @@ useEffect(() => {
             dispatch({ type: 'SET_LEVEL_PHRASES', payload: {...levelPhrases, [level]: fallbackPhrase} });
         }
     };
+
+    // Force a new phrase for every level
     fetchPhrase();
 }, [status, level]);
 
@@ -862,7 +862,7 @@ useEffect(() => {
     return () => {
         clearInterval(spawnerInterval);
     };
-}, [status, level]);
+}, [status]);
 
 // Level Announcements
 useEffect(() => {
@@ -932,7 +932,7 @@ useEffect(() => {
                 <Pause />
             </Button>
             
-            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2 pt-12">
+            <div className="absolute top-4 right-4 z-40 w-[320px] pt-12">
                 {announcements.map(announcement => (
                     <StageAnnouncement
                         key={announcement.id}
@@ -1034,5 +1034,7 @@ useEffect(() => {
     </div>
   );
 }
+
+    
 
     
