@@ -168,13 +168,22 @@ const initialState: GameState = {
 const spawnEnemy = (level: number, word: string): Enemy => {
     let allowedEnemyTypes: (keyof typeof ENEMY_TYPES)[];
 
-    if (level < 2) {
-        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware'];
-    } else if (level === 2) {
-        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth'];
-    } else if (level === 3) {
-        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth', 'Glitch'];
-    } else {
+    if (level < 5) {
+        switch (level) {
+            case 2:
+                allowedEnemyTypes = ['Stealth'];
+                break;
+            case 3:
+                allowedEnemyTypes = ['Glitch'];
+                break;
+            case 4:
+                allowedEnemyTypes = ['Splitter'];
+                break;
+            default: // Level 1
+                allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware'];
+                break;
+        }
+    } else { // Level 5 is boss, level > 5 is a mix of everything
         allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth', 'Glitch', 'Splitter'];
     }
 
@@ -229,8 +238,8 @@ const spawnSplitterChild = (parent: Enemy): Enemy => {
         id: enemyIdCounter++,
         words: [word],
         currentWordIndex: 0,
-        x: parent.x + (Math.random() - 0.5) * 50,
-        y: parent.y - 20, // Push back slightly
+        x: parent.x + (Math.random() - 0.5) * 20,
+        y: parent.y - 10,
         speed: parent.speed * 1.5,
         type: 'SplitterChild',
         vx: (Math.random() - 0.5) * 0.2, // Reduced horizontal velocity
