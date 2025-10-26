@@ -385,7 +385,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
           if (enemy) {
               const dx = p.x - enemy.x;
               const dy = p.y - enemy.y;
-              if (Math.sqrt(dx * dx + dy) < 25) {
+              if (Math.sqrt(dx * dx + dy * dy) < 25) {
                   hitProjectiles.push(p.targetId);
               }
           }
@@ -812,24 +812,28 @@ export function CyberTypeDefense() {
 useEffect(() => {
     if (status !== 'playing') return;
 
-    const fetchPhrase = async () => {
-        const isBossLevel = level % 5 === 0;
+    const fetchPhrase = async (currentLevel: number) => {
+        const isBossLevel = currentLevel % 5 === 0;
         try {
             const result = isBossLevel ? await generateBossPhrase() : await generatePhrase();
             if (result && result.words) {
-                dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level, phrase: result.words } });
+                dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level: currentLevel, phrase: result.words } });
+            } else {
+                 throw new Error("AI phrase generation returned empty result.");
             }
         } catch (error) {
-            console.error("AI Phrase generation failed, using fallback:", error);
+            console.error(`AI Phrase generation failed for level ${currentLevel}, using fallback:`, error);
             const fallbackPhrase = isBossLevel
                 ? HARDCODED_BOSS_PHRASES[Math.floor(Math.random() * HARDCODED_BOSS_PHRASES.length)]
                 : HARDCODED_PHRASES[Math.floor(Math.random() * HARDCODED_PHRASES.length)];
-            dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level, phrase: fallbackPhrase } });
+            dispatch({ type: 'SET_LEVEL_PHRASES', payload: { level: currentLevel, phrase: fallbackPhrase } });
         }
     };
     
+    // Fetch phrases for the current level if they don't exist.
+    // This now fetches a new phrase for every game.
     if (!levelPhrases[level]) {
-      fetchPhrase();
+      fetchPhrase(level);
     }
 }, [status, level, levelPhrases]);
 
@@ -875,10 +879,11 @@ useEffect(() => {
     if (status !== 'playing') return;
 
     const spawnerInterval = setInterval(() => {
+        // Don't spawn power-ups on boss levels
+        if (level % 5 === 0) return;
+
         if (powerUps.length < 2 && Math.random() < 0.25) {
-            if(level % 5 !== 0) {
-                 dispatch({ type: 'ADD_POWERUP' });
-            }
+             dispatch({ type: 'ADD_POWERUP' });
         }
     }, 10000);
 
