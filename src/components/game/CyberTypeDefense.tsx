@@ -166,11 +166,17 @@ const initialState: GameState = {
 };
 
 const spawnEnemy = (level: number, word: string): Enemy => {
-    let allowedEnemyTypes: (keyof typeof ENEMY_TYPES)[] = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware'];
+    let allowedEnemyTypes: (keyof typeof ENEMY_TYPES)[];
 
-    if (level >= 2) allowedEnemyTypes.push('Stealth');
-    if (level >= 3) allowedEnemyTypes.push('Glitch');
-    if (level >= 4) allowedEnemyTypes.push('Splitter');
+    if (level < 2) {
+        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware'];
+    } else if (level < 3) {
+        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth'];
+    } else if (level < 4) {
+        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth', 'Glitch'];
+    } else {
+        allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth', 'Glitch', 'Splitter'];
+    }
 
     const type = allowedEnemyTypes[Math.floor(Math.random() * allowedEnemyTypes.length)];
     
@@ -830,8 +836,7 @@ useEffect(() => {
         }
     };
     
-    // Fetch phrases for the current level if they don't exist.
-    // This now fetches a new phrase for every game.
+    // Fetch phrase for the current level if it doesn't exist for this game instance.
     if (!levelPhrases[level]) {
       fetchPhrase(level);
     }
@@ -839,7 +844,7 @@ useEffect(() => {
 
 // Enemy Spawner
 useEffect(() => {
-    if (status !== 'playing' || enemies.length > 0 || !levelPhrases[level]) return;
+    if (status !== 'playing' || !levelPhrases[level] || enemies.length > 0) return;
 
     const spawn = () => {
         if (status !== 'playing') return;
@@ -871,7 +876,7 @@ useEffect(() => {
     const spawnTimeout = setTimeout(spawn, 2000);
     
     return () => clearTimeout(spawnTimeout);
-}, [status, level, enemies.length, levelPhrases]);
+}, [status, level, levelPhrases]);
 
 
 // Power-up spawner
