@@ -170,9 +170,9 @@ const spawnEnemy = (level: number, word: string): Enemy => {
 
     if (level < 2) {
         allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware'];
-    } else if (level < 3) {
+    } else if (level === 2) {
         allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth'];
-    } else if (level < 4) {
+    } else if (level === 3) {
         allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth', 'Glitch'];
     } else {
         allowedEnemyTypes = ['Malware', 'Phishing', 'DDoS', 'Ransomware', 'Spyware', 'Adware', 'Stealth', 'Glitch', 'Splitter'];
@@ -233,7 +233,7 @@ const spawnSplitterChild = (parent: Enemy): Enemy => {
         y: parent.y - 20, // Push back slightly
         speed: parent.speed * 1.5,
         type: 'SplitterChild',
-        vx: (Math.random() - 0.5) * 0.5,
+        vx: (Math.random() - 0.5) * 0.2, // Reduced horizontal velocity
         vy: parent.vy * 1.2,
         status: 'alive',
         isBoss: false,
@@ -844,10 +844,10 @@ useEffect(() => {
 
 // Enemy Spawner
 useEffect(() => {
-    if (status !== 'playing' || !levelPhrases[level] || enemies.length > 0) return;
+    if (status !== 'playing' || !levelPhrases[level]) return;
 
     const spawn = () => {
-        if (status !== 'playing') return;
+        if (status !== 'playing' || enemies.length > 0) return;
 
         const phrase = levelPhrases[level];
 
@@ -879,23 +879,36 @@ useEffect(() => {
 }, [status, level, levelPhrases]);
 
 
-// Power-up spawner
+// Smart Power-up Spawner
 useEffect(() => {
     if (status !== 'playing') return;
 
     const spawnerInterval = setInterval(() => {
         // Don't spawn power-ups on boss levels
-        if (level % 5 === 0) return;
+        if (level % 5 === 0 || powerUps.length > 1) return;
 
-        if (powerUps.length < 2 && Math.random() < 0.25) {
+        const enemyCount = enemies.filter(e => e.status === 'alive').length;
+        
+        // Calculate threat level (0 to 1+)
+        // Threat increases with more enemies and lower player lives
+        const enemyThreat = Math.min(enemyCount / 8, 1); // Capped at 1 for 8+ enemies
+        const lifeThreat = 1 - (lives / INITIAL_LIVES);
+        const threatLevel = (enemyThreat * 0.6) + (lifeThreat * 0.4); // Weighted average
+
+        // Base spawn chance increases with threat level
+        const baseChance = 0.1; // 10% base chance
+        const dynamicChance = threatLevel * 0.5; // up to 50% additional chance
+        const finalChance = baseChance + dynamicChance;
+
+        if (Math.random() < finalChance) {
              dispatch({ type: 'ADD_POWERUP' });
         }
-    }, 10000);
+    }, 3000); // Check every 3 seconds
 
     return () => {
         clearInterval(spawnerInterval);
     };
-}, [status, level, powerUps.length]);
+}, [status, level, enemies, lives, powerUps.length]);
 
 // Level Announcements
 useEffect(() => {
